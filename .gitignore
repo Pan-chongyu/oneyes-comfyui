@@ -23,5 +23,15 @@ web_custom_versions/
 .DS_Store
 filtered-openapi.yaml
 uv.lock
+.secrets/
+node_modules/
+/dist/
+/build/
+/desktop/bin/
+/desktop/engine/
+/desktop/python/
+/.runtime/
+/release/
+/desktop-smoke-result.json
 .comfy_environment
 /previews/

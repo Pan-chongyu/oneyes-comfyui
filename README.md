@@ -1,127 +1,62 @@
-<div align="center">
+# OneYes ComfyUI
 
-# ComfyUI
+[中文](#中文) · [English](#english) · [下载 / Downloads](https://github.com/Pan-chongyu/oneyes-comfyui/releases/latest)
 
-**The most powerful and modular AI engine for content creation.**
+## 中文
 
-[![Website](https://img.shields.io/badge/comfy.org-4285F4?style=flat)](https://www.comfy.org/)
-[![Discord](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Finvites%2Fcomfyorg%3Fwith_counts%3Dtrue&query=%24.approximate_member_count&logo=discord&logoColor=white&label=Discord&color=green&suffix=%20total)](https://discord.com/invite/comfyorg)
-[![Twitter](https://img.shields.io/twitter/follow/ComfyUI)](https://x.com/ComfyUI)
-<br>
-[![Release](https://img.shields.io/github/v/release/Comfy-Org/ComfyUI?style=flat&sort=semver)](https://docs.comfy.org/changelog)
-[![Downloads](https://img.shields.io/github/downloads/Comfy-Org/ComfyUI/total?style=flat)](https://github.com/Comfy-Org/ComfyUI/releases)
+基于 [ComfyUI](https://github.com/Comfy-Org/ComfyUI) 的公开派生版本。保留原有节点工作流、本地模型和自定义节点，加入 OneYes API Key 接入与桌面安装器。
 
-<img width="1024" height="720" alt="ComfyDefaultWorkflow" src="https://github.com/user-attachments/assets/59232d56-277e-4144-9a77-9fc972925874" />
+### 主要功能
 
-</div>
+- **OneYes 文生图**：异步接口提交，保存原任务回执；断网或重启后继续取回，不自动重发付费请求。
+- **OneYes 参考图编辑**：二进制上传全部参考图片，保留原分辨率。数量与参数能力由模型决定。
+- **OneYes 取回原图片任务**：使用本地任务编号恢复原结果，无需再生成。
+- **OneYes 文字生成**：通过 OpenAI 兼容 Chat Completions 接口生成提示词或其他文字。
+- **Key 与模型管理**：默认 Key、图片 Key、文字 Key 分开配置；Key 使用本机 AES-256-GCM 加密，不写入导出的工作流，不调用 macOS 钥匙串。优先 oneyes.ai 直连线路。
+- **桌面运行管理**：自动配置独立 Python、CPU 依赖与官方 ComfyUI 前端。显示安装、启动、失败重试和签名 OTA 更新进度，关闭窗口可留在系统托盘。
 
-ComfyUI is the AI creation engine for visual professionals who demand control over every model, every parameter, and every output. Its powerful and modular node graph interface empowers creatives to generate images, videos, 3D models, audio, and more...
+### 下载安装
 
-- ComfyUI natively supports the latest open-source state of the art models.
-- It is by far the most optimized inference engine for diffusion models in the world with a focus on local consumer hardware.
-- Can run even the biggest open source models on as low as 4GB vram + 8GB ram relatively quickly (saturating your GPU compute) using our state of the art asynchronous weight streaming technology.
-- [Partner nodes](https://docs.comfy.org/tutorials/partner-nodes/overview#partner-nodes) provide access to the best closed source models such as Nano Banana, Seedance, Hunyuan3D, etc.
-- It is available on Windows, Linux, and macOS, locally with our [desktop application](https://www.comfy.org/download), our [portable install](docs/installation.md#windows-portable) or on our [cloud](https://www.comfy.org/cloud).
-- The most sophisticated workflows can be exposed through a simple UI thanks to App Mode.
-- It integrates seamlessly into production pipelines with our API endpoints.
+| 系统 | 芯片 | 安装格式 |
+| --- | --- | --- |
+| Windows | x64 | EXE 安装器 |
+| macOS | Apple Silicon / ARM64 | DMG、ZIP |
+| Linux | x64、ARM64 | AppImage、DEB、RPM |
 
-## Features
+下载文件名包含系统与架构。首版不包含 Intel Mac 或 Windows ARM 包。macOS 当前采用 ad-hoc 自签名，尚未经过 Apple 公证。
 
-- A visual node graph for building and reusing image, video, audio, 3D, and text workflows without code.
-- Broad native model support. This is a representative list; browse the [workflow library](https://comfy.org/workflows/) for maintained, ready-to-run templates.
-  - [Image generation](https://comfy.org/workflows/tag/text-to-image/): Stable Diffusion 1.5, SDXL, SD3.5, Flux.1, Flux.2, Qwen Image, Z-Image, Hunyuan Image 2.1, HiDream, Lumina Image 2.0, Chroma, Anima, LongCat Image, Ideogram 4, Krea 2, MageFlow, Microsoft Lens, PixelDiT, Kandinsky 5, Ernie Image and Moss Image.
-  - [Image editing](https://comfy.org/workflows/tag/image-edit/): Flux Kontext, Flux.2 Klein, Qwen Image Edit, HiDream E1.1 and O1, OmniGen2, Boogu, JoyImage Edit, MageFlow Edit, LongCat Image Edit, Fibo 2.0, Flux 3 image klein.
-  - [Video generation](https://comfy.org/workflows/tag/video-generation/): Wan 2.1 and 2.2, LTX-Video 2 and 2.3, HunyuanVideo 1.5, Kandinsky 5 Video, CogVideoX, Cosmos Predict2, Bernini-R, SCAIL 2, and Mochi.
-  - [Audio and video generation](https://comfy.org/workflows/): MiniMax H3 and LTX-AV.
-  - [Audio generation](https://comfy.org/workflows/tag/text-to-audio/): ACE-Step 1.5, Stable Audio 3, MiniMax Music 3 and Yue 2.
-  - [3D and vision](https://comfy.org/workflows/): Hunyuan3D 2.1, TripoSplat, SeedVR2, SUPIR, Depth Anything 3, MoGe, SAM 3 and 3.1, RT-DETRv4, and BiRefNet.
-  - [Text generation](https://comfy.org/workflows/tag/text-generation/): Gemma 3 and 4, Qwen3, Qwen3.5, and Qwen3-VL, including multimodal inputs.
-- Efficient local execution with asynchronous queueing, partial graph re-execution, smart VRAM and RAM management, model offloading, and support for quantized models.
-- Reusable subgraphs, workflow templates, [App Mode](https://docs.comfy.org/interface/app-mode), and a [local API](https://docs.comfy.org/development/comfyui-server/api-examples) for integrating workflows into applications.
-- Load complete checkpoints or separate diffusion models, VAEs, text encoders, LoRAs, ControlNets, adapters, and upscalers from supported model formats.
-- Built-in tools for inpainting, outpainting, reference conditioning, masks and compositing, model merging, upscaling, frame interpolation, segmentation, depth estimation, and media processing.
-- Save and load workflows as JSON. You can also drag any image, video, audio, or 3D file made with ComfyUI onto the canvas to get back the full workflow that made it, seeds included.
-- Runs fully offline: core does not download anything unless you request it. Use `--offline` to disable the optional paid [Comfy API nodes](https://docs.comfy.org/tutorials/api-nodes/overview) and force all built-in functionality to stay offline, or `--disable-partner-nodes` to only disable the API nodes.
-- Extend ComfyUI with custom nodes, installed and updated through [ComfyUI-Manager](docs/installation.md#comfyui-manager).
-- Configure additional model locations with [`extra_model_paths.yaml`](extra_model_paths.yaml.example).
-- Support for saving and loading high bit depth images and videos: 16 bit PNG images, 32 bit EXR, 10 bit AVIF are supported and more, including HDR.
+1. 从 [Release](https://github.com/Pan-chongyu/oneyes-comfyui/releases/latest) 下载对应安装包，或通过 OneYes 应用中心安装。
+2. 打开软件，填写 OneYes Key，点击“保存 Key”。不同分组可分别设置图片与文字 Key。
+3. 点击“安装依赖并打开画布”。**首次运行需要联网下载 Python / PyTorch 等依赖**，程序显示配置进度；后续复用环境。没有内置模型权重，也不会自动下载模型。
+4. 在 ComfyUI 中搜索 `OneYes` 添加节点，在节点中选择可用模型，连接原生“预览图像”或“保存图像”节点后运行。
+5. 重启恢复图片：保留原参数与任务种子重新运行，或在“OneYes 设置 → 图片任务”复制本地任务编号，交给“取回原图片任务”节点。原 Key 必须仍然有效。提交结果不明确时先在官网核对，不会自动重复收费生成。
 
-## Products
+内置运行环境使用 CPU；云端生成不需要本地显卡。GPU 用户可按 ComfyUI 官方说明管理自己的 CUDA / ROCm 环境并手动安装本扩展。不要在不受信任的网络开放本机服务。
 
-| Product | Who it's for |
-| --- | --- |
-| [Comfy Desktop](https://www.comfy.org/download) | Anyone who wants ComfyUI running locally from a normal installer, on Windows or macOS. The easiest way to start. |
-| [Developer Platform](https://www.comfy.org/platform) | Developers who want to take Comfy to production. Deploy a workflow as an API endpoint that scales, or call thousands of models through one API. |
-| [Comfy Cloud](https://www.comfy.org/cloud) | Running Comfy without local hardware. Good for experimentation and lightweight workflows. |
-| [Comfy Agent](https://www.comfy.org/agent) | Describing what you want inside ComfyUI and having it plan, build and run the workflow, editing the canvas alongside you. |
-| [Comfy MCP](https://www.comfy.org/mcp) | Driving ComfyUI from an MCP client, local or cloud: generate media, search models, nodes and templates, and run real workflows. |
-| [Comfy CLI](https://www.comfy.org/cli) | Driving the whole engine from a terminal. Built for CI jobs, scripting, and piping outputs somewhere else. |
-| [Comfy Enterprise](https://www.comfy.org/enterprise) | Organizations standardizing ComfyUI across teams: one approved reproducible build everywhere, dedicated GPU capacity and SLAs, commercial licensing and security review. |
+### 已有 ComfyUI / 从源码运行
 
-## Installing
-
-### [Comfy Desktop](https://www.comfy.org/download) is the recommended way to install ComfyUI
-
-It is the easiest and best way to get started, on Windows and macOS.
-
-Other paths:
-
-- **[Windows Portable](docs/installation.md#windows-portable)** for a self-contained build you can unzip and run.
-- **[Comfy Cloud](https://www.comfy.org/cloud)** if you would rather not run it locally at all.
-- **[comfy-cli](https://www.comfy.org/cli)** if you prefer a CLI: `pip install comfy-cli && comfy install`.
-- **[Developer Platform](https://www.comfy.org/platform)** if you are deploying a workflow as a production API endpoint rather than running the app yourself.
-- **Manual install**, below, when you need control over your Python and Torch versions.
-
-### Manual install
-
-First install PyTorch for your GPU, then:
-
-```bash
-git clone https://github.com/Comfy-Org/ComfyUI.git
-cd ComfyUI
-pip install -r requirements.txt
-python main.py
+```sh
+git clone https://github.com/Pan-chongyu/oneyes-comfyui.git
+cd oneyes-comfyui
+# 使用独立 Python 环境，按 ComfyUI 官方说明安装匹配硬件的 PyTorch
+python -m pip install -r requirements.txt -r oneyes/requirements.txt
+python -m oneyes.install
+python -m oneyes.configure
+python main.py --cpu --listen 127.0.0.1 --disable-partner-nodes
 ```
 
-Python 3.13 is very well supported and 3.14 works, though some custom nodes may have
-issues. torch 2.7 is minimally supported and cu130 or above is required on Nvidia 20
-series and above; if your pytorch is more than 6 months old, please update it.
+桌面开发：Node.js 24，`npm ci`、`npm run prepare:desktop`、`npm start`。测试：`npm test`、`npm run test:python`、`npm run test:engine`。运行真实引擎的测试会下载独立 CPU 环境，不发送付费生成请求。
 
-Put your checkpoints in `models/checkpoints` and your VAE in `models/vae`.
+Key 存储文件与本机主密钥受用户目录权限保护；能读取该用户全部文件的进程仍可解密，不能视为硬件安全存储。任务记录和原图保存在本机，不上传诊断信息。模型、工作流与数据不会随覆盖升级删除。
 
-**[docs/installation.md](docs/installation.md) has the full detail:** PyTorch commands
-for NVIDIA, AMD ROCm on Linux and Windows, Intel Arc, Apple Silicon, Huawei Ascend NPU,
-Cambricon MLU and Iluvatar Corex, plus ComfyUI-Manager setup, portable builds, previews
-and TLS.
+## English
 
-## Contributing
+OneYes ComfyUI is a public fork of ComfyUI with OneYes cloud nodes and a desktop runtime manager. Original local-model nodes, workflows and custom nodes are preserved.
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for how to ask questions, report issues, open pull
-requests, and how releases are cut across core, Desktop and the frontend.
+Included nodes: asynchronous image generation, reference-image editing, original image-task recovery and Chat Completions text generation. Credentials are encrypted locally, kept outside workflows and never sent with image downloads. The model picker loads the current key's available IDs. Separate image/text keys support different OneYes groups.
 
-## Community
+Desktop installers support Windows x64, macOS Apple Silicon and Linux x64 / ARM64. **The first launch requires an internet connection to install isolated Python / CPU PyTorch dependencies.** No model weights are included or automatically downloaded. Existing setups are reused on later launches. GPU inference is available by managing a normal ComfyUI GPU environment from source.
 
-Ask questions in [#help or #feedback on Discord](https://comfy.org/discord).
+Image receipts survive restarts. Re-run identical parameters with the same task seed, or use the recovery node with the local task ID from Settings. A missing submission receipt is never silently resubmitted. Automatic updates verify an independent Ed25519-signed manifest and package SHA-256. macOS builds are currently ad-hoc signed, without Apple notarization.
 
-_psst, we're hiring:_ [comfy.org/careers](https://www.comfy.org/careers)
-
-## References
-
-| Resource | Link |
-| --- | --- |
-| Documentation | https://docs.comfy.org |
-| Installing (this repo) | [docs/installation.md](docs/installation.md) |
-| Keyboard shortcuts | https://docs.comfy.org/interface/shortcuts |
-| Launch / startup flags | https://docs.comfy.org/development/comfyui-server/startup-flags |
-| Changelog | https://docs.comfy.org/changelog |
-| Workflow templates | https://comfy.org/workflows |
-| Older example workflows | https://comfyanonymous.github.io/ComfyUI_examples/ |
-| Built-in node reference | https://docs.comfy.org/built-in-nodes/overview |
-| Writing custom nodes | https://docs.comfy.org/custom-nodes/overview |
-| Prompt syntax: weighting, `{wildcards}`, `embedding:`, `//` comments | https://docs.comfy.org/built-in-nodes/ClipTextEncode |
-| Recovering a workflow from generated media | https://docs.comfy.org/development/api-development/workflow-metadata |
-| Troubleshooting | https://docs.comfy.org/troubleshooting/overview |
-| Which GPU should I buy? | https://github.com/Comfy-Org/ComfyUI/wiki/Which-GPU-should-I-buy-for-ComfyUI |
-| Blog | https://blog.comfy.org |
-| Discord | https://comfy.org/discord |
-| Frontend repository | https://github.com/Comfy-Org/ComfyUI_frontend |
+See [release notes](docs/RELEASE_NOTES.md), [OTA policy](docs/OTA_POLICY.zh-CN.md) and [third-party notices](docs/THIRD_PARTY.md). This is a community fork, not an official Comfy Org distribution. Licensed under GPL-3.0-or-later; full corresponding source is available here and in each release. Original project documentation is retained in [UPSTREAM_README](docs/UPSTREAM_README.md).

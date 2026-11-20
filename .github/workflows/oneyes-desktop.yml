@@ -1,0 +1,101 @@
+name: OneYes ComfyUI Desktop
+on:
+  push:
+    tags: ['oneyes-v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: oneyes-comfy-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: Windows
+            arch: x64
+            target: win
+          - os: macos-latest
+            platform: macOS
+            arch: arm64
+            target: mac
+          - os: ubuntu-24.04
+            platform: Linux
+            arch: x64
+            target: linux
+          - os: ubuntu-24.04-arm
+            platform: Linux
+            arch: arm64
+            target: linux
+    name: ${{ matrix.platform }} ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install desktop and test dependencies
+        run: |
+          npm ci
+          python -m pip install -r oneyes/requirements.txt aiohttp Pillow numpy
+      - run: npm test
+      - run: npm run test:python
+      - run: npm run prepare:desktop
+      - name: Start the real engine and execute a local workflow
+        run: npm run test:engine
+      - name: Install Linux packaging tools
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm libarchive-tools
+      - name: Build installers
+        run: npm run pack -- --${{ matrix.target }} --${{ matrix.arch }}
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OneYes-ComfyUI-${{ matrix.platform }}-${{ matrix.arch }}
+          path: |
+            dist/*.exe
+            dist/*.blockmap
+            dist/*.dmg
+            dist/*.zip
+            dist/*.AppImage
+            dist/*.deb
+            dist/*.rpm
+            desktop-smoke-result.json
+          if-no-files-found: error
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/oneyes-v')
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --omit=dev --ignore-scripts
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: OneYes-ComfyUI-*
+          path: release
+          merge-multiple: true
+      - name: Sign and verify every OTA target
+        run: npm run release:manifest
+        env:
+          COMFY_OTA_PRIVATE_KEY: ${{ secrets.COMFY_OTA_PRIVATE_KEY }}
+      - name: Publish installers, source and signed OTA
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          git archive --format=tar.gz --prefix="OneYes-ComfyUI-$VERSION/" -o "release/OneYes-ComfyUI-$VERSION-Source.tar.gz" HEAD
+          gh release create "v$VERSION" release/* --target "$GITHUB_SHA" --title "OneYes ComfyUI v$VERSION · Windows / macOS / Linux" --notes-file docs/RELEASE_NOTES.md --latest
+        env:
+          GH_TOKEN: ${{ github.token }}
