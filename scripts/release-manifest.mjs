@@ -8,6 +8,7 @@ const require = createRequire(import.meta.url);
 const { filename, platformKey, RELEASE_ROOT, readManifest } = require('../desktop/update-policy.cjs');
 const directory = path.resolve(process.argv[2] || 'release');
 const { version } = JSON.parse(await readFile('package.json', 'utf8'));
+if (process.env.GITHUB_REF_NAME) assert.equal(process.env.GITHUB_REF_NAME, `oneyes-v${version}`, 'Release tag and product version must match');
 const targets = [
     { platform: 'win32', arch: 'x64', format: 'nsis' },
     { platform: 'darwin', arch: 'arm64', format: 'zip' },
@@ -23,10 +24,10 @@ for (const name of expected) {
     sums.push(`${sha256}  ${name}`);
     const target = targets.find(t => name === filename(version, t.platform, t.arch, t.format));
     if (target) {
-        const entry = { file: name, url: `${RELEASE_ROOT}/download/v${version}/${name}`, size, sha256 };
+        const entry = { file: name, url: `${RELEASE_ROOT}/download/oneyes-v${version}/${name}`, size, sha256 };
         if (target.platform === 'win32') {
             const file = name + '.blockmap', bytes = await readFile(path.join(directory, file));
-            entry.blockmap = { file, url: `${RELEASE_ROOT}/download/v${version}/${file}`, size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
+            entry.blockmap = { file, url: `${RELEASE_ROOT}/download/oneyes-v${version}/${file}`, size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
             sums.push(`${entry.blockmap.sha256}  ${file}`);
         }
         platforms[platformKey(target)] = entry;

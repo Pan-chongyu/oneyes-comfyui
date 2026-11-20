@@ -14,7 +14,7 @@ test('OTA pins repository, architecture, install format and Ed25519 identity', (
     const target = { platform: 'linux', arch: 'arm64', format: 'deb' }, version = '0.1.1';
     const name = filename(version, target.platform, target.arch, target.format);
     assert.equal(name, 'OneYes-ComfyUI-0.1.1-Linux-arm64.deb');
-    const entry = { file: name, url: `${RELEASE_ROOT}/download/v${version}/${name}`, size: 1000, sha256: 'a'.repeat(64) };
+    const entry = { file: name, url: `${RELEASE_ROOT}/download/oneyes-v${version}/${name}`, size: 1000, sha256: 'a'.repeat(64) };
     const text = JSON.stringify({ schema: 1, version, notes: '', platforms: { [platformKey(target)]: entry } });
     const signature = sign(null, Buffer.from(text), privateKey).toString('base64');
     assert.equal(readManifest(text, signature, target, publicKey).version, version);

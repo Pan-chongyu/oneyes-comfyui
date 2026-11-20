@@ -98,6 +98,6 @@ jobs:
         run: |
           VERSION=$(node -p "require('./package.json').version")
           git archive --format=tar.gz --prefix="OneYes-ComfyUI-$VERSION/" -o "release/OneYes-ComfyUI-$VERSION-Source.tar.gz" HEAD
-          gh release create "v$VERSION" release/* --target "$GITHUB_SHA" --title "OneYes ComfyUI v$VERSION · Windows / macOS / Linux" --notes-file docs/RELEASE_NOTES.md --latest
+          gh release create "$GITHUB_REF_NAME" release/* --verify-tag --title "OneYes ComfyUI v$VERSION · Windows / macOS / Linux" --notes-file docs/RELEASE_NOTES.md --latest
         env:
           GH_TOKEN: ${{ github.token }}

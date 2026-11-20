@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { readFile, readdir, stat, access } from 'node:fs/promises';
+import { readFile, readdir, access } from 'node:fs/promises';
 import path from 'node:path';
 
 const { version } = JSON.parse(await readFile('package.json', 'utf8'));

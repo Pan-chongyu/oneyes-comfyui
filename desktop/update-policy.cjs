@@ -19,18 +19,18 @@ function readManifest(text, signature, target, publicKey = PUBLIC_KEY, currentVe
     if (data.schema !== 1 || !semver.valid(data.version) || semver.prerelease(data.version) || typeof data.notes !== 'string') throw new Error('更新清单格式无效，请稍后重试');
     const entry = data.platforms?.[platformKey(target)];
     const name = filename(data.version, target.platform, target.arch, target.format);
-    if (!entry || entry.file !== name || entry.url !== `${RELEASE_ROOT}/download/v${data.version}/${name}` || !/^[a-f0-9]{64}$/.test(entry.sha256) || !Number.isSafeInteger(entry.size) || entry.size <= 0) throw new Error('未找到适合当前系统、芯片和安装格式的更新包');
+    if (!entry || entry.file !== name || entry.url !== `${RELEASE_ROOT}/download/oneyes-v${data.version}/${name}` || !/^[a-f0-9]{64}$/.test(entry.sha256) || !Number.isSafeInteger(entry.size) || entry.size <= 0) throw new Error('未找到适合当前系统、芯片和安装格式的更新包');
     let delta;
     const candidate = currentVersion && data.deltas?.[platformKey(target)]?.[currentVersion];
     if (candidate) {
         const baseName = filename(currentVersion, target.platform, target.arch, target.format);
         const expectedDelta = deltaFilename(data.version, currentVersion, target.platform, target.arch, target.format);
-        if (candidate.from === currentVersion && candidate.file === expectedDelta && candidate.baseFile === baseName && candidate.url === `${RELEASE_ROOT}/download/v${data.version}/${expectedDelta}` && /^[a-f0-9]{64}$/.test(candidate.sha256) && /^[a-f0-9]{64}$/.test(candidate.baseSha256) && candidate.targetSha256 === entry.sha256 && candidate.targetSize === entry.size && Number.isSafeInteger(candidate.size) && candidate.size > 0 && Number.isSafeInteger(candidate.baseSize) && candidate.baseSize > 0) {
+        if (candidate.from === currentVersion && candidate.file === expectedDelta && candidate.baseFile === baseName && candidate.url === `${RELEASE_ROOT}/download/oneyes-v${data.version}/${expectedDelta}` && /^[a-f0-9]{64}$/.test(candidate.sha256) && /^[a-f0-9]{64}$/.test(candidate.baseSha256) && candidate.targetSha256 === entry.sha256 && candidate.targetSize === entry.size && Number.isSafeInteger(candidate.size) && candidate.size > 0 && Number.isSafeInteger(candidate.baseSize) && candidate.baseSize > 0) {
             delta = { from: candidate.from, file: candidate.file, url: candidate.url, size: candidate.size, sha256: candidate.sha256, baseFile: candidate.baseFile, baseSize: candidate.baseSize, baseSha256: candidate.baseSha256, targetSha256: candidate.targetSha256, targetSize: candidate.targetSize };
         }
     }
     const map = entry.blockmap, mapName = name + '.blockmap';
-    const blockmap = target.platform === 'win32' && map?.file === mapName && map.url === `${RELEASE_ROOT}/download/v${data.version}/${mapName}` && /^[a-f0-9]{64}$/.test(map.sha256) && Number.isSafeInteger(map.size) && map.size > 0 ? { file: map.file, url: map.url, size: map.size, sha256: map.sha256 } : undefined;
+    const blockmap = target.platform === 'win32' && map?.file === mapName && map.url === `${RELEASE_ROOT}/download/oneyes-v${data.version}/${mapName}` && /^[a-f0-9]{64}$/.test(map.sha256) && Number.isSafeInteger(map.size) && map.size > 0 ? { file: map.file, url: map.url, size: map.size, sha256: map.sha256 } : undefined;
     return { version: data.version, notes: data.notes, file: entry.file, url: entry.url, size: entry.size, sha256: entry.sha256, ...(delta ? { delta } : {}), ...(blockmap ? { blockmap } : {}) };
 }
 function newer(version, current) { return Boolean(semver.valid(version) && semver.valid(current) && semver.gt(version, current)); }
