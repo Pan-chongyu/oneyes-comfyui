@@ -1,4 +1,4 @@
-OneYes ComfyUI 首个桌面版本，基于 ComfyUI 0.46.0。
+OneYes ComfyUI v0.1.1，首个公开桌面版本，基于 ComfyUI 0.46.0。v0.1.0 构建产物汇总失败，未公开发布。
 
 - OneYes 文字生成、异步文生图、参考图编辑、原图片任务取回四种节点。
 - 默认 Key 与独立图片 / 文字 Key；本机 AES-256-GCM 加密，不写入工作流，不调用 macOS 钥匙串。

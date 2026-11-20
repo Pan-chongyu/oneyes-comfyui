@@ -70,7 +70,11 @@ jobs:
             dist/*.AppImage
             dist/*.deb
             dist/*.rpm
-            desktop-smoke-result.json
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Verification-${{ matrix.platform }}-${{ matrix.arch }}
+          path: desktop-smoke-result.json
           if-no-files-found: error
   publish:
     needs: build
