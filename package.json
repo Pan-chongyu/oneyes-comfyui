@@ -29,7 +29,6 @@
   "build": {
     "appId": "ai.oneyes.comfyui",
     "productName": "OneYes ComfyUI",
-    "executableName": "oneyes-comfyui",
     "directories": { "output": "dist", "buildResources": "desktop/resources" },
     "files": ["desktop/**", "!desktop/engine/**", "!desktop/bin/**", "!desktop/python/**", "package.json"],
     "extraResources": [
@@ -43,7 +42,7 @@
     "win": { "target": ["nsis"], "icon": "desktop/resources/icon.ico", "artifactName": "OneYes-ComfyUI-${version}-Windows-${arch}-Setup.${ext}" },
     "nsis": { "oneClick": false, "perMachine": false, "allowToChangeInstallationDirectory": true, "deleteAppDataOnUninstall": false, "createDesktopShortcut": true, "shortcutName": "OneYes ComfyUI" },
     "mac": { "target": ["dmg", "zip"], "icon": "desktop/resources/icon.icns", "identity": "-", "hardenedRuntime": false, "gatekeeperAssess": false, "category": "public.app-category.graphics-design", "artifactName": "OneYes-ComfyUI-${version}-macOS-${arch}.${ext}", "extendInfo": { "CFBundleDisplayName": "OneYes ComfyUI" } },
-    "linux": { "target": ["AppImage", "deb", "rpm"], "icon": "desktop/resources/icon.png", "category": "Graphics", "maintainer": "OneYes <support@oneyes.ai>", "artifactName": "OneYes-ComfyUI-${version}-Linux-${arch}.${ext}" },
+    "linux": { "target": ["AppImage", "deb", "rpm"], "executableName": "oneyes-comfyui", "icon": "desktop/resources/icon.png", "category": "Graphics", "maintainer": "OneYes <support@oneyes.ai>", "artifactName": "OneYes-ComfyUI-${version}-Linux-${arch}.${ext}" },
     "publish": null
   }
 }
