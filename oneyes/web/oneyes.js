@@ -92,6 +92,16 @@ app.registerExtension({
         } else app.ui.settings.addSetting({id:"OneYes.Settings", name:"OneYes API Key", type: () => { const button = document.createElement("button"); button.textContent="打开 OneYes 设置"; button.onclick=showSettings; return button; }});
     },
     nodeCreated(node) {
+        if (nativeNodes[node.comfyClass]?.unavailable) {
+            node.addWidget("button", "OneYes 暂未接入 · 查看原因", null, () => {
+                const panel = dialog("ElevenLabs 接口暂不可用");
+                panel.classList.add('oneyes-unavailable');
+                const message = document.createElement("p");
+                message.textContent = nativeNodes[node.comfyClass].unavailable;
+                panel.append(message);
+            }, { serialize: false });
+            return;
+        }
         if (!["OneYesImage", "OneYesImageEdit", "OneYesText"].includes(node.comfyClass) && !nativeNodes[node.comfyClass]) return;
         node.addWidget("button", "选择 OneYes 模型", null, () => chooseModel(node), { serialize: false });
         node.addWidget("button", "OneYes 设置", null, showSettings, { serialize: false });

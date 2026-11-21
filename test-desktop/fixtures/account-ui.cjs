@@ -161,6 +161,30 @@ app.on('browser-window-created', (_event, window) => {
             await js(`[...document.querySelectorAll('.oneyes-models button')].find(b=>b.textContent==='gpt-image-2.5').click()`);
             await waitFor(window, `window.nativeImageNode.widgets.find(w=>w.name==='model')?.value==='gpt-image-2.5' && window.nativeImageNode.widgets.some(w=>w.name==='model.quality')`);
             assert.equal(await js(`window.nativeImageNode.serialize().type`), 'OpenAIGPTImageNodeV2');
+            const imported = await js(`(async()=>{
+                const app=window.comfyAPI.app.app;
+                app.graph.clear();
+                const voice=LiteGraph.createNode('ElevenLabsVoiceSelector'), clone=LiteGraph.createNode('ElevenLabsInstantVoiceClone'), tts=LiteGraph.createNode('ElevenLabsTextToSpeech');
+                for(const node of [voice,clone,tts])app.graph.add(node);
+                voice.widgets.find(w=>w.name==='voice').value='Sarah (female, american)';
+                tts.widgets.find(w=>w.name==='text').value='保留原工作流语音参数';
+                voice.connect(0,tts,tts.inputs.findIndex(i=>i.name==='voice'));
+                const workflow=app.graph.serialize();
+                await app.loadGraphData(workflow);
+                const restored=app.graph._nodes;
+                window.elevenlabsTts=restored.find(n=>n.type==='ElevenLabsTextToSpeech');
+                return {types:restored.map(n=>n.type).sort(),voice:restored.find(n=>n.type==='ElevenLabsVoiceSelector').widgets.find(w=>w.name==='voice').value,text:window.elevenlabsTts.widgets.find(w=>w.name==='text').value,connected:window.elevenlabsTts.inputs.find(i=>i.name==='voice').link!=null,widgets:window.elevenlabsTts.widgets.map(w=>w.name)};
+            })()`);
+            assert.deepEqual(imported.types, ['ElevenLabsInstantVoiceClone', 'ElevenLabsTextToSpeech', 'ElevenLabsVoiceSelector']);
+            assert.equal(imported.voice, 'Sarah (female, american)');
+            assert.equal(imported.text, '保留原工作流语音参数');
+            assert.equal(imported.connected, true, 'Original ElevenLabs voice connection must survive workflow import');
+            assert.ok(imported.widgets.includes('OneYes 暂未接入 · 查看原因'));
+            assert.ok(!imported.widgets.includes('选择 OneYes 模型'), 'Unavailable APIs must not look like usable model integrations');
+            await js(`window.elevenlabsTts.widgets.find(w=>w.name==='OneYes 暂未接入 · 查看原因').callback()`);
+            await waitFor(window, `Boolean(document.querySelector('.oneyes-unavailable[open]'))`);
+            assert.match(await js(`document.querySelector('.oneyes-unavailable').textContent`), /OneYes 当前尚未接入 ElevenLabs/);
+            await js(`document.querySelector('.oneyes-unavailable .oneyes-close').click()`);
             // Account IPC is restricted even when called from another main frame.
             const untrusted = new BrowserWindow({ show: false, webPreferences: { preload: path.resolve('desktop/preload.cjs'), sandbox: true, contextIsolation: true } });
             await untrusted.loadURL('about:blank');
@@ -175,7 +199,7 @@ app.on('browser-window-created', (_event, window) => {
             console.error(await js(`JSON.stringify({buttons:[...document.querySelectorAll('[data-testid="oneyes-account-button"]')].map(b=>({text:b.textContent,rect:b.getBoundingClientRect().toJSON()})),dialogs:[...document.querySelectorAll('[role="dialog"]')].map(e=>e.textContent.slice(0,180))})`));
             if (process.env.COMFY_UI_SCREENSHOT) fs.writeFileSync(process.env.COMFY_UI_SCREENSHOT, (await window.webContents.capturePage()).toPNG());
         }
-        finally { app.quit(); }
+        finally { window.destroy(); app.quit(); }
     });
 });
 app.on('will-quit', () => {

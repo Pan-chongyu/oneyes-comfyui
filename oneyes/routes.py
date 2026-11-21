@@ -67,4 +67,7 @@ async def native_nodes(request):
     authorize(request)
     # Imported here because native adapters share the client owned by these routes.
     from .native import NATIVE_NODES, NativeNode
-    return web.json_response({node.define_schema().node_id: {"profile": node.profile, "prefixes": node.model_prefixes, "includes": node.model_includes, "excludes": node.model_excludes} for node in NATIVE_NODES if issubclass(node, NativeNode)})
+    from .elevenlabs import UNAVAILABLE_NODES, UNAVAILABLE_REASON
+    metadata = {node.define_schema().node_id: {"profile": node.profile, "prefixes": node.model_prefixes, "includes": node.model_includes, "excludes": node.model_excludes} for node in NATIVE_NODES if issubclass(node, NativeNode)}
+    metadata.update({node.define_schema().node_id: {"unavailable": UNAVAILABLE_REASON} for node in UNAVAILABLE_NODES})
+    return web.json_response(metadata)
