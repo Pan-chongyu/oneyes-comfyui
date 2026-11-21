@@ -43,6 +43,15 @@ else {
         launcher?.hide();
     }
     async function launch() { await runtime.launch(); if (runtime.state().status === 'ready') showCanvas(); }
+    async function openConfiguredCanvas() {
+        const configured = await vault.status();
+        if (configured.default || configured.image || configured.text) await launch();
+    }
+    async function connect(operation, args) {
+        const result = await account.call(operation, args);
+        if (['restore', 'reuse', 'login', 'login-2fa'].includes(operation) && result.connected && !result.requires_2fa) return account.call('auto-configure', { account_id: result.user.id });
+        return result;
+    }
     function authorize(event, onlySettings = false) {
         const url = event.senderFrame?.url;
         if (!windows.has(BrowserWindow.fromWebContents(event.sender)) || event.senderFrame !== event.sender.mainFrame || (url !== settingsURL && (onlySettings || !runtime.state().url || !url?.startsWith(runtime.state().url + '/')))) throw new Error('请求来源无效');
@@ -79,9 +88,13 @@ else {
         session.defaultSession.setPermissionCheckHandler((contents, permission, _origin, details) => permission === 'fullscreen' && details.isMainFrame && Boolean(runtime.state().url) && contents?.mainFrame.url.startsWith(runtime.state().url + '/'));
         handle('state', async () => ({ ...state(), configured: await vault.status() }));
         handle('settings', settings);
-        handle('save-keys', async changes => { await vault.save(changes); return vault.status(); }, true);
+        handle('save-keys', async changes => { await vault.save(changes); void openConfiguredCanvas().catch(settings); return vault.status(); }, true);
         handle('account', async (operation, args) => {
-            try { return await account.call(operation, args); }
+            try {
+                const result = await connect(operation, args);
+                if (operation === 'configure' || (['reuse', 'login', 'login-2fa'].includes(operation) && result.connected && !result.requires_2fa)) void openConfiguredCanvas().catch(settings);
+                return result;
+            }
             finally { send(); }
         }, true);
         handle('launch', launch, true);
@@ -101,11 +114,11 @@ else {
         tray.setContextMenu(Menu.buildFromTemplate(menu[0].submenu));
         tray.on('click', settings);
         settings();
-        void account.call('restore').then(send).catch(() => {});
+        void runtime.launch().catch(settings);
+        void connect('restore').then(async () => { send(); await openConfiguredCanvas(); }).catch(settings);
         await fs.mkdir(path.join(directory, 'ota'), { recursive: true });
         await fs.writeFile(path.join(directory, 'ota', `installed-${app.getVersion()}.ok`), 'ready');
         void updater.start();
-        try { await fs.access(path.join(directory, 'runtime/oneyes-ready')); void launch().catch(settings); } catch {}
     });
     app.on('activate', () => runtime && settings());
     app.on('window-all-closed', () => {});

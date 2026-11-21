@@ -16,13 +16,13 @@ function render(state) {
     if (state.platform === 'darwin') document.body.classList.add('macos');
     if (state.configured) configured(state.configured);
     renderAccount(state.account);
-    const runtime = state.runtime, busy = ['installing', 'starting'].includes(runtime.status);
-    $('runtime-label').textContent = ({ idle: '准备开始', installing: runtime.phase, starting: '正在启动画布', ready: '画布已启动', error: '启动未完成' })[runtime.status];
-    $('runtime-detail').textContent = runtime.message || '首次启动自动配置独立运行环境，需要联网下载依赖；之后复用本机环境。';
+    const runtime = state.runtime, busy = runtime.status === 'starting';
+    $('runtime-label').textContent = ({ idle: '随时开始', starting: '正在启动画布', ready: '画布已启动', error: '启动未完成' })[runtime.status];
+    $('runtime-detail').textContent = runtime.message || '运行环境已随安装包内置，启动无需下载依赖。';
     $('runtime-dot').className = `status-dot ${busy ? 'busy' : runtime.status}`;
     $('runtime-progress').hidden = !busy;
     $('launch').disabled = busy;
-    $('launch').textContent = busy ? '正在准备…' : runtime.status === 'ready' ? '打开画布' : runtime.status === 'error' ? '重试启动' : '安装依赖并打开画布';
+    $('launch').textContent = busy ? '正在启动…' : runtime.status === 'error' ? '重试启动' : '打开画布';
     const update = state.update;
     $('update-label').textContent = ({ idle: '尚未检查更新', checking: '正在检查更新…', downloading: `正在下载 v${update.version} · ${Math.round(update.progress)}%`, ready: `v${update.version} 已准备好`, current: '当前已是最新版本', error: '更新未完成', installing: '正在安装并重新打开…' })[update.status] || update.status;
     $('update-detail').textContent = update.error || update.notes || '更新清单采用独立 Ed25519 签名，下载后校验 SHA-256。';
@@ -100,11 +100,11 @@ $('login-form').addEventListener('submit', event => {
             const account = await bridge.account(twoFactor ? 'login-2fa' : 'login', args);
             render({ ...current, account });
             if (account.requires_2fa) $('login-code').focus();
-            else message('登录成功，请确认图片与文字使用的 Key。');
+            else message(account.error || '登录成功，已自动配置可用 Key 并打开画布；可在此调整。');
         } finally { $('login-password').value = ''; $('login-code').value = ''; }
     });
 });
-$('reuse-account').onclick = () => void runAccount(async () => { render({ ...current, account: await bridge.account('reuse') }); message('已连接 OneYes 客户端，请确认使用的 Key。'); });
+$('reuse-account').onclick = () => void runAccount(async () => { const account = await bridge.account('reuse'); render({ ...current, account }); message(account.error || '已复用登录态，自动配置可用 Key 并打开画布。'); });
 $('reconnect-account').onclick = $('reuse-account').onclick;
 $('logout-account').onclick = () => void runAccount(async () => {
     if (!window.confirm('退出本软件并清除从该账号导入的 Key？不会退出 OneYes 客户端。原图片任务取回仍需要原 Key。')) return;

@@ -53,6 +53,8 @@ jobs:
       - name: Verify native login and desktop session reuse
         run: npm run test:account-ui
       - run: npm run prepare:desktop
+      - name: Bundle standalone Python and all engine dependencies
+        run: npm run prepare:runtime
       - name: Start the real engine and execute a local workflow
         run: npm run test:engine
       - name: Build installers

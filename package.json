@@ -1,7 +1,7 @@
 {
   "name": "oneyes-comfyui",
   "productName": "OneYes ComfyUI",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "private": true,
   "description": "ComfyUI with OneYes cloud nodes and a desktop runtime manager",
   "author": "OneYes",
@@ -11,6 +11,7 @@
   "scripts": {
     "start": "electron .",
     "prepare:desktop": "node scripts/prepare-desktop.mjs",
+    "prepare:runtime": "node scripts/prepare-runtime.mjs",
     "test": "node --test test-desktop/*.test.mjs",
     "test:account-ui": "node scripts/test-account-ui.mjs",
     "test:python": "python -m unittest discover -s test-oneyes -v",
@@ -47,8 +48,8 @@
         "to": "engine"
       },
       {
-        "from": "desktop/bin",
-        "to": "bin"
+        "from": "desktop/python",
+        "to": "python"
       },
       {
         "from": "LICENSE",

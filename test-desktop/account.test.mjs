@@ -83,6 +83,50 @@ test('two-factor challenge stays in main process and can complete login', async 
     assert.deepEqual(payloads[1], { temp_token: 'challenge-secret', totp_code: '123456' });
 });
 
+test('first connection configures image and text without exposing keys; manual choices survive', async t => {
+    const f = await fixture(t);
+    await f.login();
+    const state = await f.account.call('auto-configure', { account_id: user.id });
+    assert.deepEqual(state.profiles, { image: 8, text: 8 });
+    assert.deepEqual(await f.vault.status(), { default: true, image: true, text: true });
+    assert.doesNotMatch(JSON.stringify(state), /never-render|secret/);
+    const count = f.requests.length;
+    await f.vault.save({ default: 'manual-key' });
+    await f.account.call('auto-configure', { account_id: user.id });
+    assert.equal(f.requests.length, count, 'A configured account must not fetch or rewrite keys on every launch');
+    await f.account.call('logout');
+    assert.deepEqual(await f.vault.status(), { default: true, image: false, text: false });
+});
+
+test('empty direct account creates one workflow key; desktop reuse stays read-only', async t => {
+    let created = false, writes = 0;
+    const f = await fixture(t, { fetcher: (route, init) => {
+        if (route === '/settings/public') return json({});
+        if (route === '/auth/login') return json({ access_token: 'access-secret', refresh_token: 'refresh-secret', user });
+        if (route === '/groups/available') return json([group]);
+        if (route === '/keys' && init.method === 'GET') return json({ items: created ? [key] : [], total: created ? 1 : 0 });
+        if (route === '/keys' && init.method === 'POST') { writes++; assert.deepEqual(JSON.parse(init.body), { name: 'ComfyUI_工作流', group_id: 5 }); created = true; return json(key); }
+        if (route === '/keys/8') return json(key);
+        throw new Error('Unexpected route ' + route);
+    } });
+    await f.login();
+    await f.account.call('auto-configure', { account_id: user.id });
+    assert.deepEqual(await f.vault.status(), { default: true, image: true, text: true });
+    await f.account.call('auto-configure', { account_id: user.id });
+    assert.equal(writes, 1);
+    const unavailable = await fixture(t, { broker: async operation => {
+        if (operation === 'profile') return user;
+        if (operation === 'groups') return [group];
+        if (operation === 'keys') return { items: [], total: 0 };
+        throw new Error('Reuse must not create keys');
+    } });
+    await unavailable.account.call('restore');
+    const state = await unavailable.account.call('auto-configure', { account_id: user.id });
+    assert.equal(state.connected, true);
+    assert.match(state.error, /暂无可用/);
+    assert.deepEqual(await unavailable.vault.status(), { default: false, image: false, text: false });
+});
+
 test('official verification requirements are respected before password submission', async t => {
     const f = await fixture(t, { fetcher: () => json({ turnstile_enabled: true }) });
     await assert.rejects(f.login(), /官网验证/);

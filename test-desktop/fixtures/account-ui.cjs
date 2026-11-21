@@ -10,6 +10,12 @@ app.disableHardwareAcceleration();
 // Keep this test independent of an installed copy running under the same user.
 app.requestSingleInstanceLock = () => true;
 console.log('Starting isolated account UI test.');
+// Account UI runs without preparing the multi-gigabyte engine; the real runtime has its own smoke test.
+let startupCount = 0;
+require('../../desktop/runtime.cjs').createRuntime = ({ changed }) => {
+    const state = { status: 'starting', phase: '启动 ComfyUI', message: '正在加载内置运行环境', url: '' };
+    return { state: () => state, token: () => '', async launch() { startupCount++; changed(state); return state; }, async stop() {} };
+};
 const service = require('../../desktop/account.cjs'), createAccount = service.createAccount;
 let shared = false, identity = 17, passed = false;
 const user = () => ({ id: identity, email: 'creator@example.test', username: '创作者', balance: 12.34 });
@@ -69,6 +75,7 @@ app.on('browser-window-created', (_event, window) => {
             await waitFor(window, `document.querySelector('#message').textContent.includes('已配置') && !document.querySelector('#use-account-keys').disabled`);
             const state = await js(`window.oneYesDesktop.state()`);
             assert.deepEqual(state.configured, { default: true, image: true, text: true });
+            assert.ok(startupCount > 0, 'The engine must start on a fresh installation');
             assert.doesNotMatch(JSON.stringify(state), /test-secret/);
             assert.doesNotMatch(await js(`document.body.textContent`), /test-secret/);
             if (process.env.COMFY_UI_SCREENSHOT) fs.writeFileSync(process.env.COMFY_UI_SCREENSHOT, (await window.webContents.capturePage()).toPNG());

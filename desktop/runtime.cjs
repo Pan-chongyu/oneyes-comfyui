@@ -12,47 +12,38 @@ async function availablePort() {
     return port;
 }
 
+async function bundledPython(resources) {
+    const prefix = path.join(resources, 'python');
+    const expected = process.platform === 'win32' ? 'python.exe' : 'bin/python3.12';
+    try {
+        const manifest = JSON.parse(await fs.readFile(path.join(prefix, 'oneyes-runtime.json'), 'utf8'));
+        const requirements = await Promise.all(['requirements.txt', 'oneyes/requirements.txt', 'oneyes/constraints.txt'].map(file => fs.readFile(path.join(resources, 'engine', file))));
+        if (manifest.schema !== 1 || manifest.platform !== process.platform || manifest.arch !== process.arch || manifest.python !== expected || manifest.requirements !== createHash('sha256').update(Buffer.concat(requirements)).digest('hex')) throw new Error('Runtime does not match engine');
+        const python = path.join(prefix, expected);
+        await fs.access(python);
+        return python;
+    } catch {
+        throw new Error('内置运行环境不完整，请重新下载安装本版本；已保存的工作流和设置会保留。');
+    }
+}
+
 function createRuntime({ resources, directory, changed = () => {} }) {
     const engine = path.join(resources, 'engine');
-    const uv = path.join(resources, 'bin', process.platform === 'win32' ? 'uv.exe' : 'uv');
-    const venv = path.join(directory, 'runtime');
-    const python = path.join(venv, process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
+    const prefix = path.join(resources, 'python');
     const data = path.join(directory, 'comfy');
     const token = randomBytes(32).toString('hex');
     let processHandle, exit, operation, stopping = false;
     let state = { status: 'idle', phase: '', message: '', url: '' };
     const emit = patch => { state = { ...state, ...patch }; changed({ ...state }); };
-    const env = { ...process.env, UV_PYTHON_INSTALL_DIR: path.join(directory, 'python'), UV_CACHE_DIR: path.join(directory, 'uv-cache'), UV_HTTP_TIMEOUT: '120', PYTHONUNBUFFERED: '1', ONEYES_DATA_DIR: directory, ONEYES_LOCAL_TOKEN: token, HF_HUB_DISABLE_TELEMETRY: '1', DO_NOT_TRACK: '1' };
-    delete env.PYTHONHOME; delete env.PYTHONPATH; delete env.VIRTUAL_ENV; delete env.ONEYES_API_KEY;
-
-    async function command(args, phase) {
-        emit({ status: 'installing', phase, message: phase });
-        const child = spawn(uv, args, { env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-        processHandle = child;
-        let tail = '';
-        const onData = bytes => {
-            tail = (tail + bytes.toString()).slice(-6000);
-            const line = tail.split(/[\r\n]+/).filter(Boolean).at(-1) || phase;
-            emit({ message: line.replace(/https?:\/\/\S+/g, '依赖源').slice(0, 180) });
-        };
-        child.stdout.on('data', onData); child.stderr.on('data', onData);
-        exit = new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', code => code === 0 ? resolve() : reject(new Error(`${phase}失败，请检查网络并点击重试。${tail.split(/[\r\n]+/).filter(Boolean).at(-1)?.replace(/https?:\/\/\S+/g, '依赖源').slice(0, 200) || ''}`))); });
-        try { await exit; }
-        catch (error) { await fs.writeFile(path.join(directory, 'runtime-error.log'), tail.replace(/sk-[A-Za-z0-9_-]+/g, '[已隐藏]'), { mode: 0o600 }); throw error; }
-        finally { processHandle = null; }
-    }
-
-    async function install() {
-        await fs.mkdir(directory, { recursive: true, mode: 0o700 });
-        const requirements = await Promise.all(['requirements.txt', 'oneyes/requirements.txt', 'oneyes/constraints.txt'].map(file => fs.readFile(path.join(engine, file))));
-        const identity = createHash('sha256').update(Buffer.concat(requirements)).digest('hex');
-        let ready = false;
-        try { ready = (await fs.readFile(path.join(venv, 'oneyes-ready'), 'utf8')) === identity; await fs.access(python); } catch {}
-        if (ready) return;
-        try { await fs.access(python); } catch { await command(['venv', '--python', '3.12', '--managed-python', venv], '准备独立 Python'); }
-        await command(['pip', 'install', '--python', python, '--no-deps', 'torch==2.15.0', 'torchvision==0.29.2', '--index-url', 'https://download.pytorch.org/whl/cpu'], '安装 CPU 推理运行时');
-        await command(['pip', 'install', '--python', python, '-r', path.join(engine, 'requirements.txt'), '-r', path.join(engine, 'oneyes/requirements.txt'), '-c', path.join(engine, 'oneyes/constraints.txt')], '安装 ComfyUI 和 OneYes 节点依赖');
-        await fs.writeFile(path.join(venv, 'oneyes-ready'), identity, { mode: 0o600 });
+    const env = { ...process.env, PYTHONHOME: prefix, PYTHONNOUSERSITE: '1', PYTHONDONTWRITEBYTECODE: '1', PYTHONUNBUFFERED: '1', ONEYES_DATA_DIR: directory, ONEYES_LOCAL_TOKEN: token, HF_HUB_DISABLE_TELEMETRY: '1', DO_NOT_TRACK: '1', XDG_CACHE_HOME: path.join(directory, 'cache'), HF_HOME: path.join(directory, 'cache/huggingface'), NUMBA_CACHE_DIR: path.join(directory, 'cache/numba') };
+    delete env.PYTHONPATH; delete env.VIRTUAL_ENV; delete env.ONEYES_API_KEY;
+    async function terminate() {
+        if (!processHandle?.pid) return;
+        if (process.platform === 'win32') {
+            const child = spawn(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32/taskkill.exe'), ['/PID', String(processHandle.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
+            await new Promise(resolve => { child.once('exit', resolve); child.once('error', resolve); });
+        } else processHandle.kill('SIGTERM');
+        await exit;
     }
 
     async function launch() {
@@ -60,7 +51,9 @@ function createRuntime({ resources, directory, changed = () => {} }) {
         if (operation) return operation;
         stopping = false;
         operation = (async () => {
-            await install();
+            emit({ status: 'starting', phase: '启动 ComfyUI', message: '正在加载内置运行环境' });
+            const python = await bundledPython(resources);
+            if (stopping) return state;
             for (const folder of ['user', 'input', 'output', 'models', 'custom_nodes']) await fs.mkdir(path.join(data, folder), { recursive: true });
             const extension = path.join(data, 'custom_nodes/oneyes');
             await fs.mkdir(extension, { recursive: true });
@@ -73,19 +66,22 @@ function createRuntime({ resources, directory, changed = () => {} }) {
             let ended = false, log = '';
             const capture = bytes => { log = (log + bytes.toString()).slice(-6000); };
             child.stdout.on('data', capture); child.stderr.on('data', capture);
-            exit = new Promise(resolve => child.once('exit', resolve));
-            child.once('error', () => { ended = true; });
+            exit = new Promise(resolve => child.once('close', resolve));
+            child.once('error', error => { ended = true; log += error.message; processHandle = null; });
             child.once('exit', () => { ended = true; processHandle = null; if (!stopping) emit({ status: 'error', message: 'ComfyUI 已停止，请重新启动。若刚安装了其他节点，请检查该节点的运行依赖。' }); });
             while (!ended && !stopping) {
+                let info;
                 try {
                     const response = await fetch(`${url}/object_info/OneYesImage`, { signal: AbortSignal.timeout(3000) });
-                    if (response.ok && (await response.json()).OneYesImage) { emit({ status: 'ready', phase: '就绪', message: '画布已就绪', url }); return state; }
+                    if (response.ok) info = await response.json();
                 } catch {}
+                if (info?.OneYesImage) { emit({ status: 'ready', phase: '就绪', message: '画布已就绪', url }); return state; }
+                if (info) { await terminate(); break; }
                 await new Promise(resolve => setTimeout(resolve, 500));
             }
             if (!stopping) {
                 await fs.writeFile(path.join(directory, 'engine-error.log'), log.replace(/sk-[A-Za-z0-9_-]+/g, '[已隐藏]'), { mode: 0o600 });
-                throw new Error('ComfyUI 启动失败。可打开数据目录查看 engine-error.log，修复依赖后重试。');
+                throw new Error('画布启动失败，请重试；可打开数据目录查看 engine-error.log，或重新安装本版本。');
             }
         })().catch(error => { if (!stopping) emit({ status: 'error', message: error.message }); throw error; }).finally(() => { operation = null; });
         return operation;
@@ -94,15 +90,9 @@ function createRuntime({ resources, directory, changed = () => {} }) {
         state: () => ({ ...state }), token: () => token, launch, data,
         async stop() {
             stopping = true;
-            if (processHandle) {
-                if (process.platform === 'win32') {
-                    const child = spawn(path.join(process.env.SystemRoot || 'C:\\Windows', 'System32/taskkill.exe'), ['/PID', String(processHandle.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
-                    await new Promise(resolve => { child.once('exit', resolve); child.once('error', resolve); });
-                } else processHandle.kill('SIGTERM');
-                await exit;
-            }
+            await terminate();
             emit({ status: 'idle', phase: '', message: '', url: '' });
         },
     };
 }
-module.exports = { createRuntime, availablePort };
+module.exports = { createRuntime, availablePort, bundledPython };

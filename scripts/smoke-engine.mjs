@@ -1,11 +1,21 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
-import { mkdtemp, writeFile, rm, mkdir } from 'node:fs/promises';
+import { mkdtemp, writeFile, rm, mkdir, rename, readdir, readFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
 const require = createRequire(import.meta.url), { createRuntime } = require('../desktop/runtime.cjs');
 const directory = process.env.ONEYES_SMOKE_DIR || await mkdtemp(path.join(os.tmpdir(), 'oneyes-comfy-smoke-'));
+await mkdir('.runtime', { recursive: true });
+const resources = await mkdtemp(path.join(path.resolve('.runtime'), '离线 安装-'));
+const moved = [];
+// Relocate the distribution, including native libraries, just as a user installation does.
+// No uv binary or system virtualenv is available at the installed resources path.
+const originalResources = path.resolve('desktop');
+process.env.UV_OFFLINE = process.env.HF_HUB_OFFLINE = process.env.TRANSFORMERS_OFFLINE = '1';
+process.env.HTTP_PROXY = process.env.HTTPS_PROXY = 'http://127.0.0.1:9';
+process.env.NO_PROXY = '127.0.0.1,localhost,::1';
+process.env.PYTHONHOME = process.env.PYTHONPATH = process.env.VIRTUAL_ENV = path.join(directory, 'not-a-python');
 const fixture = path.join(directory, 'comfy/custom_nodes/oneyes_test_transport');
 await mkdir(fixture, { recursive: true });
 // The fake transport lives exclusively in the disposable test profile, never in the shipped engine.
@@ -27,10 +37,18 @@ async def request(origin, path, key, payload=None, multipart=None):
 client.request = request
 NODE_CLASS_MAPPINGS = {}
 `);
-const runtime = createRuntime({ resources: path.resolve('desktop'), directory, changed: state => console.log(JSON.stringify({ status: state.status, phase: state.phase, message: state.message })) });
+const runtime = createRuntime({ resources, directory, changed: state => console.log(JSON.stringify({ status: state.status, phase: state.phase, message: state.message })) });
 try {
+    for (const name of ['python', 'engine']) { await rename(path.join(originalResources, name), path.join(resources, name)); moved.push(name); }
     await runtime.launch();
     const origin = runtime.state().url;
+    const page = await fetch(origin + '/');
+    assert.equal(page.status, 200, 'Bundled frontend must be served offline');
+    const html = await page.text(), script = html.match(/<script[^>]+src="([^"]+)"/);
+    assert.ok(script, 'Bundled frontend entry is missing');
+    const entry = new URL(script[1], origin);
+    assert.equal(entry.origin, origin, 'Frontend must be loaded locally');
+    assert.equal((await fetch(entry)).status, 200);
     const nodes = await fetch(origin + '/object_info').then(r => r.json());
     for (const name of ['OneYesImage', 'OneYesImageEdit', 'OneYesRecoverImage', 'OneYesText', 'KSampler', 'SaveImage', 'LoadImage']) assert.ok(nodes[name], `Missing actual ComfyUI node ${name}`);
     const denied = await fetch(origin + '/oneyes/settings'); assert.equal(denied.status, 403);
@@ -60,8 +78,14 @@ try {
     await execute({ 1: image, 2: { class_type: 'OneYesImageEdit', inputs: { ...image.inputs, images: ['1', 0], seed: 2 } }, 3: { class_type: 'SaveImage', inputs: { images: ['2', 0], filename_prefix: 'OneYes-test-edit' } } });
     await execute({ 1: { class_type: 'OneYesText', inputs: { model: 'test-text', prompt: 'test', system: '', temperature: 0.7 } }, 2: { class_type: 'PreviewAny', inputs: { source: ['1', 0] } } });
     console.log(JSON.stringify({ engine: 'ComfyUI', oneYesNodes: 4, oneYesGraphs: 'success with test-only transport; no paid requests', localGraph: 'success', localAuth: 'verified', native: process.platform + '-' + process.arch }));
-    await writeFile(path.resolve('desktop-smoke-result.json'), JSON.stringify({ nodes: 4, oneYesGraphs: 'success', localGraph: 'success', platform: process.platform, arch: process.arch }));
+    assert.ok(!(await readdir(directory)).some(name => ['runtime', 'python', 'uv-cache'].includes(name)), 'Fresh launch must not create/download a Python environment');
+    await writeFile(path.resolve('desktop-smoke-result.json'), JSON.stringify({ nodes: 4, oneYesGraphs: 'success', localGraph: 'success', relocatedOfflineRuntime: true, platform: process.platform, arch: process.arch }));
+} catch (error) {
+    try { console.error(await readFile(path.join(directory, 'engine-error.log'), 'utf8')); } catch {}
+    throw error;
 } finally {
     await runtime.stop();
+    for (const name of moved.reverse()) await rename(path.join(resources, name), path.join(originalResources, name));
+    await rm(resources, { recursive: true, force: true });
     if (!process.env.ONEYES_SMOKE_DIR) await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
 }
