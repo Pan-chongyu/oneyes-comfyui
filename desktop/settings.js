@@ -1,6 +1,6 @@
 const bridge = window.oneYesDesktop;
 const $ = id => document.getElementById(id);
-let current, modelValues = [];
+let current, modelValues = [], accountBusy = false, catalogFor = '', twoFactor = false;
 const message = value => $('message').textContent = value;
 const action = (id, callback) => $(id).addEventListener('click', async () => { $(id).disabled = true; message(''); try { await callback(); } catch (error) { message(error.message.replace(/^Error invoking remote method '[^']+': Error: /, '')); } finally { $(id).disabled = false; } });
 for (const button of document.querySelectorAll('nav button')) button.onclick = () => {
@@ -15,6 +15,7 @@ function render(state) {
     $('update-version').textContent = `当前版本 v${state.version} · ${state.arch}`;
     if (state.platform === 'darwin') document.body.classList.add('macos');
     if (state.configured) configured(state.configured);
+    renderAccount(state.account);
     const runtime = state.runtime, busy = ['installing', 'starting'].includes(runtime.status);
     $('runtime-label').textContent = ({ idle: '准备开始', installing: runtime.phase, starting: '正在启动画布', ready: '画布已启动', error: '启动未完成' })[runtime.status];
     $('runtime-detail').textContent = runtime.message || '首次启动自动配置独立运行环境，需要联网下载依赖；之后复用本机环境。';
@@ -30,6 +31,99 @@ function render(state) {
     $('install-update').hidden = update.status !== 'ready';
     $('check-update').disabled = ['checking', 'downloading', 'installing'].includes(update.status) || !update.supported;
 }
+function renderAccount(account) {
+    const user = account?.user;
+    $('account-entry').hidden = Boolean(user);
+    $('account-summary').hidden = !user;
+    twoFactor = Boolean(account?.requires_2fa);
+    $('login-fields').hidden = twoFactor;
+    $('totp-fields').hidden = !twoFactor;
+    $('cancel-totp').hidden = !twoFactor;
+    $('login-email').required = $('login-password').required = !twoFactor;
+    $('login-code').required = twoFactor;
+    $('login-submit').textContent = accountBusy ? '正在连接…' : twoFactor ? '验证并登录' : '登录';
+    $('account-panel').setAttribute('aria-busy', String(accountBusy));
+    for (const button of $('account-panel').querySelectorAll('button')) button.disabled = accountBusy;
+    $('use-account-keys').disabled = accountBusy || !account?.connected || !$('account-image').value || !$('account-text').value;
+    $('create-account-key').disabled = accountBusy || !account?.connected || !$('new-key-group').value;
+    $('account-status').textContent = account?.error || (user ? account.connected ? '已连接，Key 只保存在本机，不进入工作流。' : '暂未连接，已保存的 Key 仍可用于原工作流；可刷新重试。' : '可独立登录，也可复用本机 OneYes 客户端账号。');
+    if (!user) { catalogFor = ''; $('account-image').replaceChildren(); $('account-text').replaceChildren(); return; }
+    $('account-name').textContent = user.username || user.email || 'OneYes 用户';
+    $('account-avatar').textContent = (user.username || user.email || 'O').slice(0, 1).toUpperCase();
+    $('account-email').textContent = user.email;
+    $('account-source').textContent = account.source === 'desktop' ? '已复用客户端登录' : 'OneYes 账号登录';
+    $('account-balance').textContent = '余额 $' + Number(user.balance || 0).toLocaleString('zh-CN', { maximumFractionDigits: 4 });
+    $('reconnect-account').hidden = account.source !== 'desktop' || account.connected;
+    $('create-key-section').hidden = account.source !== 'login';
+    const identity = `${user.id}:${account.source}`;
+    if (account.connected && catalogFor !== identity) { catalogFor = identity; void loadCatalog().catch(error => message(error.message)); }
+}
+async function runAccount(callback) {
+    if (accountBusy) return;
+    accountBusy = true; message(''); renderAccount(current?.account);
+    try { await callback(); }
+    catch (error) { message(error.message.replace(/^Error invoking remote method '[^']+': Error: /, '')); }
+    finally { accountBusy = false; render(await bridge.state()); }
+}
+async function loadCatalog(preferredId) {
+    const user = current?.account?.user;
+    if (!user) return;
+    const identity = `${user.id}:${current.account.source}`;
+    const data = await bridge.account('catalog', { account_id: user.id });
+    if (!current.account?.connected || `${current.account.user?.id}:${current.account.source}` !== identity) return;
+    const available = data.keys.filter(key => key.usable);
+    const groupFor = key => data.groups.find(group => group.id === key.group_id) || key.group || {};
+    for (const role of ['image', 'text']) {
+        const select = $('account-' + role), old = select.value;
+        select.replaceChildren(new Option(available.length ? '请选择 Key' : '暂无可用 Key', ''));
+        for (const key of data.keys) {
+            const group = groupFor(key), option = new Option(`${key.name || 'Key ' + key.id} · ${group.platform || '平台'} / ${group.name || key.group_id}${key.usable ? '' : '（不可用）'}`, String(key.id));
+            option.disabled = !key.usable; select.add(option);
+        }
+        const ranked = available.slice().sort((a, b) => {
+            const score = key => { const g = groupFor(key), p = g.platform?.toLowerCase(), n = g.name?.trim().toLowerCase(); return (role === 'text' && p === 'deepseek' ? 20 : p === 'openai' ? n === 'svip' ? 15 : n === 'vip' ? 10 : 5 : 0) + (key.name === 'ComfyUI_工作流' ? 1 : 0); };
+            return score(b) - score(a) || a.id - b.id;
+        });
+        const saved = current.account.profiles?.[role];
+        select.value = available.some(key => key.id === preferredId) ? String(preferredId) : available.some(key => key.id === saved) ? String(saved) : available.some(key => String(key.id) === old) ? old : ranked[0] ? String(ranked[0].id) : '';
+    }
+    $('new-key-group').replaceChildren(new Option('请选择分组', ''));
+    for (const group of data.groups) $('new-key-group').add(new Option(`${group.platform} / ${group.name}`, String(group.id)));
+    $('account-key-hint').textContent = !available.length ? current.account.source === 'desktop' ? '还没有可用 Key。请在 OneYes 客户端新建后刷新，或退出后直接登录本软件创建。' : '还没有可用 Key。可在下方为所需分组新建，再点击使用。' : '请选择对应分组的 Key；相同 Key 也可以同时用于图片和文字。';
+    renderAccount(current.account);
+}
+$('login-form').addEventListener('submit', event => {
+    event.preventDefault();
+    void runAccount(async () => {
+        const args = twoFactor ? { code: $('login-code').value } : { email: $('login-email').value, password: $('login-password').value };
+        try {
+            const account = await bridge.account(twoFactor ? 'login-2fa' : 'login', args);
+            render({ ...current, account });
+            if (account.requires_2fa) $('login-code').focus();
+            else message('登录成功，请确认图片与文字使用的 Key。');
+        } finally { $('login-password').value = ''; $('login-code').value = ''; }
+    });
+});
+$('reuse-account').onclick = () => void runAccount(async () => { render({ ...current, account: await bridge.account('reuse') }); message('已连接 OneYes 客户端，请确认使用的 Key。'); });
+$('reconnect-account').onclick = $('reuse-account').onclick;
+$('logout-account').onclick = () => void runAccount(async () => {
+    if (!window.confirm('退出本软件并清除从该账号导入的 Key？不会退出 OneYes 客户端。原图片任务取回仍需要原 Key。')) return;
+    await bridge.account('logout'); message('已退出本软件，手动填写的 Key 保持不变。');
+});
+$('cancel-totp').onclick = () => void runAccount(async () => { await bridge.account('logout'); $('login-code').value = ''; });
+$('refresh-account').onclick = () => void runAccount(async () => { const account = await bridge.account('restore'); render({ ...current, account }); if (account.connected) await loadCatalog(); });
+$('account-keys').addEventListener('submit', event => {
+    event.preventDefault();
+    void runAccount(async () => {
+        const result = await bridge.account('configure', { account_id: current.account.user.id, image_id: Number($('account-image').value), text_id: Number($('account-text').value) });
+        configured(result.configured); message('已配置图片与文字 Key，可以打开画布创作。');
+    });
+});
+$('create-account-key').onclick = () => void runAccount(async () => {
+    const key = await bridge.account('create-key', { account_id: current.account.user.id, group_id: Number($('new-key-group').value) });
+    await loadCatalog(key.id); message('Key 已准备好，请确认用途并点击“使用所选 Key”。');
+});
+for (const id of ['account-image', 'account-text', 'new-key-group']) $(id).onchange = () => renderAccount(current.account);
 $('key-form').addEventListener('submit', async event => {
     event.preventDefault(); const button = event.submitter; button.disabled = true;
     try {

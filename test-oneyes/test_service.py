@@ -105,6 +105,14 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
 
 
 class StorageTests(unittest.TestCase):
+    def test_manual_key_replacement_removes_account_ownership(self):
+        with tempfile.TemporaryDirectory() as directory:
+            vault = Vault(directory)
+            with patch.object(vault, "read", return_value={"image": "account-key", "_owners": {"image": 17}}):
+                vault.save({"image": "manual-key"})
+            self.assertEqual(vault.key("image"), "manual-key")
+            self.assertEqual(vault.read()["_owners"], {})
+
     def test_keys_are_encrypted_and_profile_falls_back(self):
         with tempfile.TemporaryDirectory() as directory:
             vault = Vault(directory); vault.save({"default": "secret-default", "image": "secret-image"})

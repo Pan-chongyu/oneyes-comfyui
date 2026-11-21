@@ -3,7 +3,8 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { createRuntime } = require('./runtime.cjs');
-const { createVault } = require('./vault.cjs');
+const { createVault, createEncryptedStore } = require('./vault.cjs');
+const { createAccount } = require('./account.cjs');
 const { createUpdater } = require('./updater.cjs');
 const { updateTarget } = require('./update-platform.cjs');
 const { prepareInstall } = require('./update-install.cjs');
@@ -11,11 +12,11 @@ const { prepareInstall } = require('./update-install.cjs');
 app.setName('OneYes ComfyUI');
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-    let launcher, viewer, tray, runtime, vault, updater, quitting = false, stopped = false;
+    let launcher, viewer, tray, runtime, vault, account, updater, quitting = false, stopped = false;
     const settingsURL = pathToFileURL(path.join(__dirname, 'settings.html')).href;
     const windows = new Set();
     const send = () => { for (const window of windows) if (!window.isDestroyed()) window.webContents.send('oneyes:state', state()); };
-    const state = () => ({ runtime: runtime.state(), update: updater.state(), version: app.getVersion(), platform: process.platform, arch: process.arch });
+    const state = () => ({ runtime: runtime.state(), update: updater.state(), account: account.state(), version: app.getVersion(), platform: process.platform, arch: process.arch });
     function windowOptions() { return { width: 1020, height: 740, minWidth: 740, minHeight: 620, backgroundColor: '#191b20', title: 'OneYes ComfyUI', icon: path.join(__dirname, 'resources/icon.png'), titleBarStyle: 'hidden', ...(process.platform !== 'darwin' ? { titleBarOverlay: { color: '#191b20', symbolColor: '#d2d6e2', height: 40 } } : { trafficLightPosition: { x: 16, y: 14 } }), webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } }; }
     function secureWindow(window, allowed) {
         windows.add(window);
@@ -63,6 +64,7 @@ else {
         const resources = app.isPackaged ? process.resourcesPath : __dirname;
         runtime = createRuntime({ resources, directory, changed: send });
         vault = createVault(directory);
+        account = createAccount({ store: createEncryptedStore(directory, 'account.json'), vault, fetcher: (url, init) => net.fetch(url, init) });
         updater = createUpdater({ currentVersion: app.getVersion(), directory, target: () => updateTarget(), enabled: app.isPackaged, fetcher: (url, init) => net.fetch(url, init), changed: send, install: async plan => {
             const start = await prepareInstall(plan);
             await start();
@@ -78,6 +80,10 @@ else {
         handle('state', async () => ({ ...state(), configured: await vault.status() }));
         handle('settings', settings);
         handle('save-keys', async changes => { await vault.save(changes); return vault.status(); }, true);
+        handle('account', async (operation, args) => {
+            try { return await account.call(operation, args); }
+            finally { send(); }
+        }, true);
         handle('launch', launch, true);
         handle('keys', () => shell.openExternal('https://oneyes.ai/keys'), true);
         handle('data', () => shell.openPath(directory), true);
@@ -94,6 +100,7 @@ else {
         tray.setContextMenu(Menu.buildFromTemplate(menu[0].submenu));
         tray.on('click', settings);
         settings();
+        void account.call('restore').then(send).catch(() => {});
         await fs.mkdir(path.join(directory, 'ota'), { recursive: true });
         await fs.writeFile(path.join(directory, 'ota', `installed-${app.getVersion()}.ok`), 'ready');
         void updater.start();

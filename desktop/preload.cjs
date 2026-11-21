@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('oneYesDesktop', {
     state: () => ipcRenderer.invoke('oneyes:state'),
     saveKeys: changes => ipcRenderer.invoke('oneyes:save-keys', changes),
+    account: (operation, args) => ipcRenderer.invoke('oneyes:account', operation, args),
     launch: () => ipcRenderer.invoke('oneyes:launch'),
     openSettings: () => ipcRenderer.invoke('oneyes:settings'),
     openData: () => ipcRenderer.invoke('oneyes:data'),

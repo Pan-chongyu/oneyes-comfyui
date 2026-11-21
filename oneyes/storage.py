@@ -62,6 +62,7 @@ class Vault:
                     values[name] = value.strip()
                 else:
                     values.pop(name, None)
+                values.get("_owners", {}).pop(name, None)
             iv = secrets.token_bytes(12)
             encrypted = AESGCM(self.master()).encrypt(iv, json.dumps(values).encode(), None)
             write_json(self.directory / "vault.json", {"iv": base64.b64encode(iv).decode(), "data": base64.b64encode(encrypted).decode()})
