@@ -1,0 +1,4 @@
+!macro customInstall
+  ; Refresh shell icons after both installation and silent OTA upgrades.
+  System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
+!macroend

@@ -33,7 +33,7 @@ for (const name of expected) {
         platforms[platformKey(target)] = entry;
     }
 }
-const text = JSON.stringify({ schema: 1, version, notes: '支持直接登录 OneYes、二次验证、记住登录状态，或复用 OneYes 客户端账号；按分组选择图片与文字 Key，独立登录可新建或复用工作流 Key。切换账号时清理原账号导入的 Key。', platforms }, null, 2) + '\n';
+const text = JSON.stringify({ schema: 1, version, notes: '统一使用 ComfyUI 官方 Logo：应用、安装包、设置页和应用中心图标同步更新；macOS 使用标准留白的应用图标及黑白状态栏图标，Windows 安装后刷新系统图标。', platforms }, null, 2) + '\n';
 if (!process.env.COMFY_OTA_PRIVATE_KEY) throw new Error('COMFY_OTA_PRIVATE_KEY secret is required');
 const privateKey = createPrivateKey(process.env.COMFY_OTA_PRIVATE_KEY);
 const signature = sign(null, Buffer.from(text), privateKey).toString('base64');

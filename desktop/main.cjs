@@ -93,8 +93,9 @@ else {
         handle('update-install', () => updater.apply(), true);
         const menu = [{ label: 'OneYes', submenu: [{ label: 'OneYes 设置', accelerator: 'CmdOrCtrl+,', click: settings }, { label: '打开画布', click: () => void launch().catch(settings) }, { label: '检查更新', click: () => { settings(); void updater.check(); } }, { type: 'separator' }, { label: '退出', accelerator: 'CmdOrCtrl+Q', click: () => { quitting = true; app.quit(); } }] }, { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' }];
         Menu.setApplicationMenu(Menu.buildFromTemplate(menu));
-        let icon = nativeImage.createFromPath(path.join(__dirname, 'resources', process.platform === 'darwin' ? 'trayTemplate.png' : 'icon.png')).resize({ width: 18, height: 18 });
+        let icon = nativeImage.createFromPath(path.join(__dirname, 'resources', process.platform === 'darwin' ? 'trayTemplate.png' : 'icon.png'));
         if (process.platform === 'darwin') icon.setTemplateImage(true);
+        else icon = icon.resize({ width: 18, height: 18 });
         tray = new Tray(icon);
         tray.setToolTip('OneYes ComfyUI');
         tray.setContextMenu(Menu.buildFromTemplate(menu[0].submenu));
