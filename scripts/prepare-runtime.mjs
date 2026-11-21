@@ -36,7 +36,7 @@ let previous;
 try { previous = JSON.parse(await readFile(path.join(prefix, 'oneyes-runtime.json'), 'utf8')); } catch {}
 if (previous?.requirements === identity && previous.pythonVersion === version && previous.platform === process.platform && previous.arch === process.arch) {
     await windowsRuntime();
-    execFileSync(python, ['-I', '-c', 'import torch, torchvision, aiohttp, cryptography, comfyui_frontend_package'], { env, stdio: 'inherit', windowsHide: true });
+    execFileSync(python, ['-I', '-c', 'import torch, torchvision, aiohttp, cryptography, comfyui_frontend_package; from backports import zstd'], { env, stdio: 'inherit', windowsHide: true });
     console.log('Bundled Python and engine dependencies are already prepared');
 } else {
     await mkdir(staging, { recursive: true });
@@ -50,7 +50,7 @@ if (previous?.requirements === identity && previous.pythonVersion === version &&
     run(['pip', 'install', '--system', '--break-system-packages', '--python', python, '-r', 'requirements.txt', '-r', 'oneyes/requirements.txt', '-c', 'oneyes/constraints.txt']);
     run(['pip', 'check', '--python', python]);
     await windowsRuntime();
-    execFileSync(python, ['-I', '-c', 'import torch, torchvision, aiohttp, cryptography, comfyui_frontend_package; print("Bundled imports verified")'], { env, stdio: 'inherit', windowsHide: true });
+    execFileSync(python, ['-I', '-c', 'import torch, torchvision, aiohttp, cryptography, comfyui_frontend_package; from backports import zstd; print("Bundled imports verified")'], { env, stdio: 'inherit', windowsHide: true });
     await writeFile(path.join(prefix, 'oneyes-runtime.json'), JSON.stringify({ schema: 1, platform: process.platform, arch: process.arch, python: interpreter, pythonVersion: version, requirements: identity }, null, 2) + '\n');
     console.log(`Prepared offline runtime: Python ${version}, ${process.platform}-${process.arch}`);
 }

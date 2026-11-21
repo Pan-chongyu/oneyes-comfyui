@@ -16,6 +16,7 @@
 - **账号登录**：邮箱 / 密码登录、二次验证码、加密保存登录状态并自动恢复；同一用户下打开并登录 OneYes 客户端后，可直接复用登录态。密码不保存，客户端账号令牌不复制到本软件。
 - **Key 与模型管理**：默认、通用图片 / 文字及 Claude、Gemini、Grok 图片 / 视频 Key 分开配置；Video 分组独立路由，模型选择按当前 Key 权限刷新。Key 使用本机 AES-256-GCM 加密，不写入导出的工作流，不调用 macOS 钥匙串。优先 oneyes.ai 直连线路。
 - **安装即用**：安装包内置独立 Python、CPU 推理库和官方 ComfyUI 前端，首启自动启动画布，无需另装 Python 或在线下载依赖。关闭窗口可留在系统托盘，支持签名 OTA。
+- **原版节点依赖随包提供**：核对全部原版内置节点加载，补齐 SPZ v4 依赖；离线验证图像、超分、音视频和 3D 导入导出。模型权重仍按原版放入对应目录。
 
 ### 下载安装
 
@@ -56,6 +57,8 @@ Key 存储文件与本机主密钥受用户目录权限保护；能读取该用�
 ## English
 
 OneYes ComfyUI is a public fork of ComfyUI with OneYes cloud nodes and accounts integrated into native Settings → User. Original local-model nodes, workflows and custom nodes are preserved.
+
+Original built-in node dependencies are bundled, including Zstandard for SPZ v4. Every desktop target verifies built-in node registration and executes representative image, upscaling, audio, video and 3D workflows offline. Model weights remain separate.
 
 Included nodes: asynchronous image generation, reference-image editing, original image-task recovery and Chat Completions text generation. Credentials are encrypted locally, kept outside workflows and never sent with image downloads. The model picker loads the current key's available IDs. Separate image/text keys support different OneYes groups.
 

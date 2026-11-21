@@ -40,7 +40,8 @@ client.request = request
 NODE_CLASS_MAPPINGS = {}
 `);
 await writeFile(path.join(fixture, 'native_cloud.py'), await readFile('test-desktop/fixtures/native-cloud.py'));
-await writeFile(path.join(fixture, '__init__.py'), (await readFile(path.join(fixture, '__init__.py'), 'utf8')) + '\nfrom . import native_cloud\n');
+await writeFile(path.join(fixture, 'builtin_nodes.py'), await readFile('test-desktop/fixtures/builtin-nodes.py'));
+await writeFile(path.join(fixture, '__init__.py'), (await readFile(path.join(fixture, '__init__.py'), 'utf8')) + '\nfrom . import native_cloud, builtin_nodes\n');
 const runtime = createRuntime({ resources, directory, changed: state => console.log(JSON.stringify({ status: state.status, phase: state.phase, message: state.message })) });
 try {
     for (const name of ['python', 'engine', 'frontend']) { await rename(path.join(originalResources, name), path.join(resources, name)); moved.push(name); }
@@ -96,9 +97,14 @@ try {
     const verification = await native.text();
     assert.equal(native.status, 200, verification);
     assert.equal(JSON.parse(verification).nativeNodes, 19);
-    console.log(JSON.stringify({ engine: 'ComfyUI', oneYesNodes: 23, nativeContracts: JSON.parse(verification), oneYesGraphs: 'success with test-only transport; no paid requests', localGraph: 'success', localAuth: 'verified', native: process.platform + '-' + process.arch }));
+    const builtins = await fetch(origin + '/oneyes-test/builtins');
+    const builtinVerification = await builtins.text();
+    assert.equal(builtins.status, 200, builtinVerification);
+    const builtinContracts = JSON.parse(builtinVerification);
+    assert.equal(builtinContracts.offline, true);
+    console.log(JSON.stringify({ engine: 'ComfyUI', oneYesNodes: 23, nativeContracts: JSON.parse(verification), builtinContracts, oneYesGraphs: 'success with test-only transport; no paid requests', localGraph: 'success', localAuth: 'verified', native: process.platform + '-' + process.arch }));
     assert.ok(!(await readdir(directory)).some(name => ['runtime', 'python', 'uv-cache'].includes(name)), 'Fresh launch must not create/download a Python environment');
-    await writeFile(path.resolve('desktop-smoke-result.json'), JSON.stringify({ nodes: 23, nativeContracts: JSON.parse(verification), oneYesGraphs: 'success', localGraph: 'success', relocatedOfflineRuntime: true, platform: process.platform, arch: process.arch }));
+    await writeFile(path.resolve('desktop-smoke-result.json'), JSON.stringify({ nodes: 23, nativeContracts: JSON.parse(verification), builtinContracts, oneYesGraphs: 'success', localGraph: 'success', relocatedOfflineRuntime: true, platform: process.platform, arch: process.arch }));
 } catch (error) {
     try { console.error(await readFile(path.join(directory, 'engine-error.log'), 'utf8')); } catch {}
     throw error;

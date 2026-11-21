@@ -1,1 +1,3 @@
 cryptography==50.0.2
+# Original File3DToSplat node needs Zstandard for SPZ v4 on bundled Python 3.12.
+backports.zstd==1.8.0; python_version < '3.14'
