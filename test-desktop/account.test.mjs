@@ -51,18 +51,18 @@ test('direct login, safe catalog, selected keys and encrypted restart/refresh', 
     assert.deepEqual(catalog.groups, [{ id: 5, name: 'SVIP', platform: 'OpenAI' }]);
     assert.doesNotMatch(JSON.stringify(catalog), /never-render|private|secret/);
     await f.account.call('configure', { account_id: user.id, image_id: key.id, text_id: key.id });
-    assert.deepEqual(await f.vault.status(), { default: true, image: true, text: true });
+    assert.deepEqual(await f.vault.status(), { default: true, image: true, text: true, claude: false, gemini: false, grok: false, video: false });
     assert.equal(f.requests.filter(r => r.pathname === '/keys/8').length, 1);
     for (const file of ['account.json', 'vault.json']) assert.doesNotMatch(await readFile(path.join(f.directory, file), 'utf8'), /secret|creator@example|sk-never/);
     assert.doesNotMatch(JSON.stringify(await f.store.read()), /password-secret|access-secret/);
     const restored = createAccount(f.dependencies);
     assert.equal((await restored.call('restore')).connected, true);
     assert.equal((await f.store.read()).refresh_token, 'rotated-refresh-1');
-    assert.deepEqual(await f.vault.status(), { default: true, image: true, text: true });
+    assert.deepEqual(await f.vault.status(), { default: true, image: true, text: true, claude: false, gemini: false, grok: false, video: false });
     assert.ok(f.requests.every(r => r.url.startsWith('https://oneyes.ai/api/v1/')));
     await f.vault.save({ text: 'manual-secret' });
     await restored.call('logout');
-    assert.deepEqual(await f.vault.status(), { default: false, image: false, text: true });
+    assert.deepEqual(await f.vault.status(), { default: false, image: false, text: true, claude: false, gemini: false, grok: false, video: false });
     assert.equal((await createAccount(f.dependencies).call('restore')).user, null);
 });
 
@@ -88,14 +88,14 @@ test('first connection configures image and text without exposing keys; manual c
     await f.login();
     const state = await f.account.call('auto-configure', { account_id: user.id });
     assert.deepEqual(state.profiles, { image: 8, text: 8 });
-    assert.deepEqual(await f.vault.status(), { default: true, image: true, text: true });
+    assert.deepEqual(await f.vault.status(), { default: true, image: true, text: true, claude: false, gemini: false, grok: false, video: false });
     assert.doesNotMatch(JSON.stringify(state), /never-render|secret/);
     const count = f.requests.length;
     await f.vault.save({ default: 'manual-key' });
     await f.account.call('auto-configure', { account_id: user.id });
     assert.equal(f.requests.length, count, 'A configured account must not fetch or rewrite keys on every launch');
     await f.account.call('logout');
-    assert.deepEqual(await f.vault.status(), { default: true, image: false, text: false });
+    assert.deepEqual(await f.vault.status(), { default: true, image: false, text: false, claude: false, gemini: false, grok: false, video: false });
 });
 
 test('empty direct account creates one workflow key; desktop reuse stays read-only', async t => {
@@ -111,7 +111,7 @@ test('empty direct account creates one workflow key; desktop reuse stays read-on
     } });
     await f.login();
     await f.account.call('auto-configure', { account_id: user.id });
-    assert.deepEqual(await f.vault.status(), { default: true, image: true, text: true });
+    assert.deepEqual(await f.vault.status(), { default: true, image: true, text: true, claude: false, gemini: false, grok: false, video: false });
     await f.account.call('auto-configure', { account_id: user.id });
     assert.equal(writes, 1);
     const unavailable = await fixture(t, { broker: async operation => {
@@ -124,7 +124,7 @@ test('empty direct account creates one workflow key; desktop reuse stays read-on
     const state = await unavailable.account.call('auto-configure', { account_id: user.id });
     assert.equal(state.connected, true);
     assert.match(state.error, /暂无可用/);
-    assert.deepEqual(await unavailable.vault.status(), { default: false, image: false, text: false });
+    assert.deepEqual(await unavailable.vault.status(), { default: false, image: false, text: false, claude: false, gemini: false, grok: false, video: false });
 });
 
 test('official verification requirements are respected before password submission', async t => {
@@ -132,6 +132,29 @@ test('official verification requirements are respected before password submissio
     await assert.rejects(f.login(), /官网验证/);
     assert.equal(f.requests.length, 1);
     assert.equal(f.requests[0].init.method, 'GET');
+});
+
+test('native providers select separate platform keys and Video never uses the Grok text group', async t => {
+    const groups = [group, { id: 6, name: 'Claude', platform: 'anthropic' }, { id: 7, name: 'Gemini', platform: 'gemini' }, { id: 8, name: 'grok', platform: 'grok' }, { id: 9, name: 'Video', platform: 'grok' }];
+    const keys = groups.map((item, index) => ({ ...key, id: index + 20, group_id: item.id, group: item, key: 'sk-native-secret-' + index }));
+    const f = await fixture(t, { fetcher: (route, init) => {
+        if (route === '/settings/public') return json({});
+        if (route === '/auth/login') return json({ access_token: 'access-secret', refresh_token: 'refresh-secret', user });
+        if (route === '/groups/available') return json(groups);
+        if (route === '/keys' && init.method === 'GET') return json({ items: keys, total: keys.length });
+        if (/^\/keys\/\d+$/.test(route)) return json(keys.find(key => key.id === Number(route.split('/').at(-1))));
+        throw new Error('Unexpected provider request');
+    } });
+    await f.login();
+    const state = await f.account.call('auto-configure', { account_id: user.id });
+    assert.deepEqual(state.profiles, { image: 20, text: 20, claude: 21, gemini: 22, grok: 23, video: 24 });
+    assert.doesNotMatch(JSON.stringify(state), /sk-native/);
+    const count = f.requests.length;
+    await f.account.call('auto-configure', { account_id: user.id });
+    assert.equal(f.requests.length, count);
+    await f.vault.save({ gemini: 'manual-gemini-secret' });
+    await f.account.call('logout');
+    assert.deepEqual(await f.vault.status(), { default: false, image: false, text: false, claude: false, gemini: true, grok: false, video: false });
 });
 
 test('desktop reuse pins identity and never copies account tokens or creates Canvas keys', async t => {
@@ -153,7 +176,7 @@ test('desktop reuse pins identity and never copies account tokens or creates Can
     const stale = await f.account.call('restore');
     assert.equal(stale.connected, false);
     assert.match(stale.error, /账号已切换/);
-    assert.deepEqual(await f.vault.status(), { default: false, image: false, text: false });
+    assert.deepEqual(await f.vault.status(), { default: false, image: false, text: false, claude: false, gemini: false, grok: false, video: false });
     assert.equal((await f.account.call('reuse')).user.id, 18);
     await f.account.call('logout');
     assert.equal(active.id, 18);
@@ -168,10 +191,10 @@ test('offline restore keeps cached identity and existing keys for original workf
     const state = await offline.call('restore');
     assert.equal(state.user.id, user.id);
     assert.equal(state.connected, false);
-    assert.deepEqual(await f.vault.status(), { default: true, image: true, text: true });
+    assert.deepEqual(await f.vault.status(), { default: true, image: true, text: true, claude: false, gemini: false, grok: false, video: false });
     const expired = createAccount({ ...f.dependencies, fetcher: async () => json({}, 401) });
     assert.equal((await expired.call('restore')).user, null);
-    assert.deepEqual(await f.vault.status(), { default: false, image: false, text: false });
+    assert.deepEqual(await f.vault.status(), { default: false, image: false, text: false, claude: false, gemini: false, grok: false, video: false });
 });
 
 test('reads can fall back, writes with uncertain results are not replayed', async t => {
@@ -198,7 +221,7 @@ test('new Key reuses existing name/group, rejects inactive keys and unknown grou
     const blocked = await fixture(t, { broker: async operation => operation === 'profile' ? user : operation === 'key' ? { ...key, status: 'disabled' } : null });
     await blocked.account.call('reuse');
     await assert.rejects(blocked.account.call('configure', { account_id: user.id, image_id: 8, text_id: 8 }), /停用/);
-    assert.deepEqual(await blocked.vault.status(), { default: false, image: false, text: false });
+    assert.deepEqual(await blocked.vault.status(), { default: false, image: false, text: false, claude: false, gemini: false, grok: false, video: false });
 });
 
 test('new Key uses only an available group and a fixed ComfyUI name', async t => {

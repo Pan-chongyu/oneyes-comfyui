@@ -29,14 +29,18 @@ Image.new('RGB', (17, 23), 'blue').save(buffer, 'PNG')
 encoded = base64.b64encode(buffer.getvalue()).decode()
 async def request(origin, path, key, payload=None, multipart=None):
     assert key == 'test-only-do-not-call'
-    if path == '/models': return {'data': [{'id': 'test-image'}, {'id': 'test-text'}]}, 1
+    if path == '/models': return {'data': [{'id': value} for value in ['test-image', 'test-text', 'gpt-image-2', 'gpt-6.1-sol', 'claude-opus-4-6']]}, 1
     if path == '/chat/completions': return {'choices': [{'message': {'content': 'OneYes local test'}}]}, 1
+    if path == '/responses': return {'status': 'completed', 'output': [{'type': 'message', 'content': [{'type': 'output_text', 'text': 'Native OpenAI workflow'}]}]}, 1
+    if path == '/messages': return {'content': [{'type': 'text', 'text': 'Native Claude workflow'}]}, 1
     if path.endswith('/async'): return {'task_id': 'test-receipt', 'status': 'processing'}, 1
     assert path == '/images/tasks/test-receipt'
     return {'task_id': 'test-receipt', 'status': 'completed', 'result': {'data': [{'b64_json': encoded}]}}, 1
 client.request = request
 NODE_CLASS_MAPPINGS = {}
 `);
+await writeFile(path.join(fixture, 'native_cloud.py'), await readFile('test-desktop/fixtures/native-cloud.py'));
+await writeFile(path.join(fixture, '__init__.py'), (await readFile(path.join(fixture, '__init__.py'), 'utf8')) + '\nfrom . import native_cloud\n');
 const runtime = createRuntime({ resources, directory, changed: state => console.log(JSON.stringify({ status: state.status, phase: state.phase, message: state.message })) });
 try {
     for (const name of ['python', 'engine', 'frontend']) { await rename(path.join(originalResources, name), path.join(resources, name)); moved.push(name); }
@@ -51,6 +55,9 @@ try {
     assert.equal((await fetch(entry)).status, 200);
     const frontend = await fetch(origin + '/oneyes-frontend.json').then(r => r.json());
     assert.equal(frontend.nativeUserPanel, true);
+    assert.equal(frontend.oneYesAccountButton, true);
+    assert.match(await fetch(origin + '/assets/' + frontend.authModule).then(r => r.text()), /openSettings\('account'\)/);
+    assert.equal((await fetch(origin + '/oneyes-account-button.js')).status, 200);
     assert.match(await fetch(origin + '/assets/' + frontend.userPanel).then(r => r.text()), /mountAccountPanel/);
     assert.match(await fetch(origin + '/oneyes-native.js').then(r => r.text()), /useSettingsDialog/);
     assert.equal((await fetch(origin + '/extensions/oneyes/account-panel.html')).status, 200);
@@ -82,9 +89,16 @@ try {
     await execute({ 1: { class_type: 'OneYesRecoverImage', inputs: { task_id: task.id } }, 2: { class_type: 'SaveImage', inputs: { images: ['1', 0], filename_prefix: 'OneYes-test-recover' } } });
     await execute({ 1: image, 2: { class_type: 'OneYesImageEdit', inputs: { ...image.inputs, images: ['1', 0], seed: 2 } }, 3: { class_type: 'SaveImage', inputs: { images: ['2', 0], filename_prefix: 'OneYes-test-edit' } } });
     await execute({ 1: { class_type: 'OneYesText', inputs: { model: 'test-text', prompt: 'test', system: '', temperature: 0.7 } }, 2: { class_type: 'PreviewAny', inputs: { source: ['1', 0] } } });
-    console.log(JSON.stringify({ engine: 'ComfyUI', oneYesNodes: 4, oneYesGraphs: 'success with test-only transport; no paid requests', localGraph: 'success', localAuth: 'verified', native: process.platform + '-' + process.arch }));
+    await execute({ 1: { class_type: 'OpenAIGPTImage1', inputs: { model: 'gpt-image-2', prompt: 'native original node', seed: 35, quality: 'high', background: 'transparent', n: 1, size: '1024x1024' } }, 2: { class_type: 'SaveImage', inputs: { images: ['1', 0], filename_prefix: 'native-original-image' } } });
+    await execute({ 1: { class_type: 'OpenAIChatNode', inputs: { model: 'gpt-6.1-sol', prompt: 'native workflow', persist_context: false } }, 2: { class_type: 'PreviewAny', inputs: { source: ['1', 0] } } });
+    await execute({ 1: { class_type: 'ClaudeNode', inputs: { prompt: 'native workflow', model: 'Opus 4.6', 'model.max_tokens': 5000, 'model.reasoning_effort': 'off', 'model.temperature': 1, seed: 2, system_prompt: '' } }, 2: { class_type: 'PreviewAny', inputs: { source: ['1', 0] } } });
+    const native = await fetch(origin + '/oneyes-test/native');
+    const verification = await native.text();
+    assert.equal(native.status, 200, verification);
+    assert.equal(JSON.parse(verification).nativeNodes, 19);
+    console.log(JSON.stringify({ engine: 'ComfyUI', oneYesNodes: 23, nativeContracts: JSON.parse(verification), oneYesGraphs: 'success with test-only transport; no paid requests', localGraph: 'success', localAuth: 'verified', native: process.platform + '-' + process.arch }));
     assert.ok(!(await readdir(directory)).some(name => ['runtime', 'python', 'uv-cache'].includes(name)), 'Fresh launch must not create/download a Python environment');
-    await writeFile(path.resolve('desktop-smoke-result.json'), JSON.stringify({ nodes: 4, oneYesGraphs: 'success', localGraph: 'success', relocatedOfflineRuntime: true, platform: process.platform, arch: process.arch }));
+    await writeFile(path.resolve('desktop-smoke-result.json'), JSON.stringify({ nodes: 23, nativeContracts: JSON.parse(verification), oneYesGraphs: 'success', localGraph: 'success', relocatedOfflineRuntime: true, platform: process.platform, arch: process.arch }));
 } catch (error) {
     try { console.error(await readFile(path.join(directory, 'engine-error.log'), 'utf8')); } catch {}
     throw error;

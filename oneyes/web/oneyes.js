@@ -1,8 +1,11 @@
 import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
+let nativeNodes = {};
+
 async function request(path, options) {
     const response = await api.fetchApi(`/oneyes/${path}`, options);
+    if (!response.ok && !response.headers.get('Content-Type')?.includes('application/json')) throw new Error('OneYes 本机连接未就绪，请关闭并重新打开软件');
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "连接失败，请检查设置后重试");
     return data;
@@ -25,7 +28,7 @@ async function showSettings(section = 'account') {
     const panel = dialog("OneYes 设置");
     const note = document.createElement("p"); note.textContent = "Key 仅保存在本机，不写入工作流。图片与文字可使用不同分组的 Key。"; panel.append(note);
     const fields = {};
-    for (const [name, label] of [["default", "默认 Key"], ["image", "图片 Key（选填）"], ["text", "文字 Key（选填）"]]) {
+    for (const [name, label] of [["default", "默认 Key"], ["image", "OpenAI / 图片 Key（选填）"], ["text", "文字 Key（选填）"], ["claude", "Claude Key（选填）"], ["gemini", "Gemini Key（选填）"], ["grok", "Grok 图片 Key（选填）"], ["video", "Grok 视频 Key（选填）"]]) {
         const row = document.createElement("label"); row.textContent = label;
         const input = document.createElement("input"); input.type = "password"; input.autocomplete = "off"; input.placeholder = "留空保留已有 Key";
         row.append(input); panel.append(row); fields[name] = input;
@@ -49,7 +52,10 @@ async function chooseModel(node) {
     const status = document.createElement("p"); status.textContent = "正在读取当前 Key 的可用模型…"; status.setAttribute("role", "status");
     panel.append(search, status, list);
     try {
-        const { models } = await request(`models/${node.comfyClass === "OneYesText" ? "text" : "image"}`);
+        const native = nativeNodes[node.comfyClass];
+        const result = await request(`models/${native?.profile || (node.comfyClass === "OneYesText" ? "text" : "image")}`);
+        const models = native ? result.models.filter(model => { const value = model.toLowerCase(); return native.prefixes.some(prefix => value.startsWith(prefix)) && (!native.includes.length || native.includes.some(term => value.includes(term))) && !native.excludes.some(term => value.includes(term)); }) : result.models;
+        if (native) await app.reloadNodeDefs();
         status.textContent = `${models.length} 个可用模型，请选择支持当前节点接口的模型`;
         const render = () => {
             list.replaceChildren();
@@ -68,12 +74,13 @@ app.registerExtension({
     commands: window.oneYesDesktop ? [
         { id: 'OneYes.Account', label: 'OneYes 账户与 Key', function: () => showSettings() },
         { id: 'OneYes.Models', label: 'OneYes 可用模型', function: () => showSettings('models') },
-        { id: 'OneYes.Tasks', label: 'OneYes 图片任务', function: () => showSettings('tasks') },
+        { id: 'OneYes.Tasks', label: 'OneYes 云端任务', function: () => showSettings('tasks') },
         { id: 'OneYes.Updates', label: 'OneYes 软件更新', function: () => showSettings('updates') },
     ] : [],
     menuCommands: window.oneYesDesktop ? [{ path: ['OneYes'], commands: ['OneYes.Account', 'OneYes.Models', 'OneYes.Tasks', 'OneYes.Updates'] }] : [],
     async init() {
         if (window.oneYesDesktop && !app.ui.settings.getSettingValue('Comfy.TutorialCompleted')) await app.ui.settings.setSettingValueAsync('Comfy.TutorialCompleted', true);
+        nativeNodes = await request('native-nodes');
     },
     async setup() {
         const style = document.createElement("style");
@@ -85,7 +92,7 @@ app.registerExtension({
         } else app.ui.settings.addSetting({id:"OneYes.Settings", name:"OneYes API Key", type: () => { const button = document.createElement("button"); button.textContent="打开 OneYes 设置"; button.onclick=showSettings; return button; }});
     },
     nodeCreated(node) {
-        if (!["OneYesImage", "OneYesImageEdit", "OneYesText"].includes(node.comfyClass)) return;
+        if (!["OneYesImage", "OneYesImageEdit", "OneYesText"].includes(node.comfyClass) && !nativeNodes[node.comfyClass]) return;
         node.addWidget("button", "选择 OneYes 模型", null, () => chooseModel(node), { serialize: false });
         node.addWidget("button", "OneYes 设置", null, showSettings, { serialize: false });
     },

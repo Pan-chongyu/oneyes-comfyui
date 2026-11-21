@@ -76,6 +76,77 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         images = [value for details, headers, value in form._fields if details["name"] == "image[]"]
         self.assertEqual(images, [self.png] * 3)
 
+    async def test_native_image_options_mask_and_alpha_survive_reopen(self):
+        stream = BytesIO(); Image.new("RGBA", (31, 19), (30, 50, 80, 27)).save(stream, "PNG")
+        self.png = stream.getvalue()
+        self.client.request = self.reply
+        options = {"n": 3, "background": "transparent", "complexity": "high"}
+        result, job = await self.client.image("example-image", "prompt", "4096x3072", "high", 11, [self.png], options=options, mask=self.png)
+        form = next(item[4] for item in self.calls if item[1].endswith("/async"))
+        fields = {details["name"]: value for details, headers, value in form._fields}
+        self.assertEqual(fields["n"], "3"); self.assertEqual(fields["background"], "transparent")
+        self.assertEqual(fields["complexity"], "high"); self.assertEqual(fields["size"], "4096x3072")
+        self.assertEqual(fields["mask"], self.png)
+        self.assertEqual(result[0].mode, "RGBA"); self.assertEqual(result[0].getpixel((0, 0))[3], 27)
+        reopened = OneYesClient(self.temp.name)
+        restored, _ = await reopened.recover(job)
+        self.assertEqual(restored[0].getpixel((0, 0))[3], 27)
+        _, different = await self.client.image("example-image", "prompt", "4096x3072", "high", 11, [self.png], options={**options, "n": 4}, mask=self.png)
+        self.assertNotEqual(different, job)
+
+    async def test_native_protocols_use_separate_keys_and_fixed_origins(self):
+        self.client.vault.save({"image": "openai-key", "claude": "claude-key", "gemini": "gemini-key"})
+        async def reply(origin, path, key, payload=None, multipart=None):
+            self.calls.append((origin, path, key, payload))
+            if path == "/models": return {"data": [{"id": "model"}]}, 1
+            return {"ok": True}, 1
+        self.client.request = reply
+        await self.client.generate("image", "/responses", {"model": "model", "input": "test"})
+        await self.client.generate("claude", "/messages", {"model": "model", "messages": []})
+        await self.client.generate("gemini", "/models/model:generateContent", {"contents": []}, gemini=True, model="model")
+        self.assertEqual([(origin, path, key) for origin, path, key, payload in self.calls if payload is not None], [(ORIGINS[0], "/responses", "openai-key"), (ORIGINS[0], "/messages", "claude-key"), ("https://oneyes.ai/v1beta", "/models/model:generateContent", "gemini-key")])
+        with self.assertRaisesRegex(OneYesError, "无此模型"):
+            await self.client.generate("image", "/responses", {"model": "not-in-this-group"})
+
+    async def test_video_receipt_and_local_result_survive_restart_without_reposting(self):
+        self.client.vault.save({"video": "video-key", "grok": "image-only-key"})
+        async def reply(origin, path, key, payload=None, multipart=None):
+            self.assertEqual(key, "video-key")
+            self.calls.append(path)
+            if path == "/models": return {"data": [{"id": "grok-imagine-video"}]}, 1
+            if payload: return {"request_id": "original-video"}, 1
+            return {"status": "done", "video": {"url": "https://example.com/video.mp4"}}, 1
+        async def download(url, target):
+            target.write_bytes(b"isolated-video-test")
+        self.client.request = reply; self.client.download = download
+        payload = {"model": "grok-imagine-video", "prompt": "test", "duration": 5, "seed": 1}
+        result = await self.client.video(payload)
+        self.assertEqual(result.read_bytes(), b"isolated-video-test")
+        self.assertEqual(self.calls, ["/models", "/videos/generations", "/videos/original-video"])
+        self.calls.clear()
+        reopened = OneYesClient(self.temp.name); reopened.request = reply
+        self.assertEqual(await reopened.video(payload), result)
+        self.assertEqual(self.calls, [])
+        job = reopened.records()[0]
+        with self.assertRaisesRegex(OneYesError, "这是视频任务"):
+            await reopened.recover(job["id"])
+        record = reopened.read_record(job["id"]); record.pop("url"); record["status"] = "processing"; write_json(reopened.record_path(job["id"]), record)
+        self.assertEqual(await reopened.video(payload), result)
+        self.assertEqual(self.calls, ["/videos/original-video"])
+
+    async def test_uncertain_video_submission_is_not_replayed(self):
+        async def reply(origin, path, key, payload=None, multipart=None):
+            self.calls.append(path)
+            if path == "/models": return {"data": []}, 1
+            raise aiohttp.ClientConnectionError("lost response")
+        self.client.request = reply
+        payload = {"model": "grok-imagine-video", "prompt": "private", "seed": 2}
+        for _ in range(2):
+            with self.assertRaisesRegex(OneYesError, "不会.*重复提交"):
+                await self.client.video(payload)
+        self.assertEqual(self.calls.count("/videos/generations"), 1)
+        self.assertNotIn("private", json.dumps(self.client.records()))
+
     async def test_changed_key_cannot_retrieve_another_keys_task(self):
         self.client.request = self.reply
         _, job = await self.client.image("example-image", "prompt", "auto", "auto", 3)

@@ -8,6 +8,7 @@ import threading
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+PROFILES = ("default", "image", "text", "claude", "gemini", "grok", "video")
 
 def data_directory():
     return Path(os.environ.get("ONEYES_DATA_DIR", Path.home() / ".oneyes-comfyui"))
@@ -56,7 +57,7 @@ class Vault:
         with self.lock:
             values = self.read()
             for name, value in changes.items():
-                if name not in ("default", "image", "text") or not isinstance(value, str):
+                if name not in PROFILES or not isinstance(value, str):
                     raise ValueError("Key 设置无效")
                 if value.strip():
                     values[name] = value.strip()
@@ -76,4 +77,4 @@ class Vault:
 
     def status(self):
         values = self.read()
-        return {name: bool(values.get(name)) for name in ("default", "image", "text")}
+        return {name: bool(values.get(name)) for name in PROFILES}

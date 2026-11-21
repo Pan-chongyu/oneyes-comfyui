@@ -10,6 +10,7 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
     root.innerHTML = template;
     const { section: initialSection } = await import('/oneyes-native.js');
     const $ = id => root.querySelector('#' + id);
+    const profiles = ['default', 'image', 'text', 'claude', 'gemini', 'grok', 'video'];
     let current, modelValues = [], accountBusy = false, catalogFor = '', twoFactor = false;
     const message = value => { if ($('message')) $('message').textContent = value; };
     const action = (id, callback) => {
@@ -42,7 +43,7 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
     }
     window.addEventListener('oneyes:panel', navigate);
     navigate(initialSection);
-    function configured(values) { for (const name of ['default', 'image', 'text']) $(name + '-configured').textContent = values[name] ? '已保存' : ''; }
+    function configured(values) { for (const name of profiles) $(name + '-configured').textContent = values[name] ? '已保存' : ''; }
     function render(state) {
         if (!root.isConnected) return;
         current = state;
@@ -70,7 +71,7 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
         $('cancel-totp').hidden = !twoFactor;
         $('login-email').required = $('login-password').required = !twoFactor;
         $('login-code').required = twoFactor;
-        $('login-submit').textContent = accountBusy ? '正在连接…' : twoFactor ? '验证并登录' : '登录';
+        $('login-submit').textContent = accountBusy ? '正在连接…' : twoFactor ? '验证并登录' : '登录 OneYes';
         $('account-panel').setAttribute('aria-busy', String(accountBusy));
         for (const button of $('account-panel').querySelectorAll('button')) button.disabled = accountBusy;
         $('use-account-keys').disabled = accountBusy || !account?.connected || !$('account-image').value || !$('account-text').value;
@@ -103,19 +104,29 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
         if (!current.account?.connected || `${current.account.user?.id}:${current.account.source}` !== identity) return;
         const available = data.keys.filter(key => key.usable);
         const groupFor = key => data.groups.find(group => group.id === key.group_id) || key.group || {};
-        for (const role of ['image', 'text']) {
+        function platformScore(key, role) {
+            const group = groupFor(key), platform = group.platform?.toLowerCase(), name = group.name?.trim().toLowerCase();
+            if (role === 'video') return platform === 'grok' && name === 'video' ? 30 : 0;
+            if (role === 'grok') return platform === 'grok' && name !== 'video' ? 30 : 0;
+            if (role === 'claude') return /^(anthropic|claude)$/.test(platform) ? 30 : 0;
+            if (role === 'gemini') return /^(google|gemini)$/.test(platform) ? 30 : 0;
+            if (role === 'text' && platform === 'deepseek') return 20;
+            return platform === 'openai' ? name === 'svip' ? 15 : name === 'vip' ? 10 : 5 : 0;
+        }
+        for (const role of ['image', 'text', 'claude', 'gemini', 'grok', 'video']) {
             const select = $('account-' + role), old = select.value;
-            select.replaceChildren(new Option(available.length ? '请选择 Key' : '暂无可用 Key', ''));
+            const native = !['image', 'text'].includes(role);
+            select.replaceChildren(new Option(native ? '使用默认 Key' : available.length ? '请选择 Key' : '暂无可用 Key', ''));
             for (const key of data.keys) {
                 const group = groupFor(key), option = new Option(`${key.name || 'Key ' + key.id} · ${group.platform || '平台'} / ${group.name || key.group_id}${key.usable ? '' : '（不可用）'}`, String(key.id));
                 option.disabled = !key.usable; select.add(option);
             }
             const ranked = available.slice().sort((a, b) => {
-                const score = key => { const g = groupFor(key), p = g.platform?.toLowerCase(), n = g.name?.trim().toLowerCase(); return (role === 'text' && p === 'deepseek' ? 20 : p === 'openai' ? n === 'svip' ? 15 : n === 'vip' ? 10 : 5 : 0) + (key.name === 'ComfyUI_工作流' ? 1 : 0); };
-                return score(b) - score(a) || a.id - b.id;
+                return platformScore(b, role) - platformScore(a, role) || a.id - b.id;
             });
             const saved = current.account.profiles?.[role];
-            select.value = available.some(key => key.id === preferredId) ? String(preferredId) : available.some(key => key.id === saved) ? String(saved) : available.some(key => String(key.id) === old) ? old : ranked[0] ? String(ranked[0].id) : '';
+            const preferred = available.find(key => key.id === preferredId && platformScore(key, role));
+            select.value = preferred ? String(preferred.id) : available.some(key => key.id === saved) ? String(saved) : available.some(key => String(key.id) === old) ? old : ranked[0] && platformScore(ranked[0], role) ? String(ranked[0].id) : '';
         }
         $('new-key-group').replaceChildren(new Option('请选择分组', ''));
         for (const group of data.groups) $('new-key-group').add(new Option(`${group.platform} / ${group.name}`, String(group.id)));
@@ -145,29 +156,31 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
     $('account-keys').addEventListener('submit', event => {
         event.preventDefault();
         void runAccount(async () => {
-            const result = await bridge.account('configure', { account_id: current.account.user.id, image_id: Number($('account-image').value), text_id: Number($('account-text').value) });
-            configured(result.configured); message('已配置图片与文字 Key，可以关闭设置开始创作。');
+            const result = await bridge.account('configure', { account_id: current.account.user.id, ...Object.fromEntries(profiles.filter(name => name !== 'default').map(name => [name + '_id', Number($('account-' + name).value)])) });
+            configured(result.configured); message('已配置节点与平台 Key，可以关闭设置开始创作。');
         });
     });
     $('create-account-key').onclick = () => void runAccount(async () => {
         const key = await bridge.account('create-key', { account_id: current.account.user.id, group_id: Number($('new-key-group').value) });
         await loadCatalog(key.id); message('Key 已准备好，请确认用途并点击“使用所选 Key”。');
     });
-    for (const id of ['account-image', 'account-text', 'new-key-group']) $(id).onchange = () => renderAccount(current.account);
+    for (const id of ['account-image', 'account-text', 'account-claude', 'account-gemini', 'account-grok', 'account-video', 'new-key-group']) $(id).onchange = () => renderAccount(current.account);
     $('key-form').addEventListener('submit', async event => {
         event.preventDefault(); const button = event.submitter; button.disabled = true;
         try {
             const changes = {};
-            for (const name of ['default', 'image', 'text']) if ($(name + '-key').value.trim()) changes[name] = $(name + '-key').value.trim();
+            for (const name of profiles) if ($(name + '-key').value.trim()) changes[name] = $(name + '-key').value.trim();
             if (!Object.keys(changes).length) { message('请填写要保存的 Key；留空会保留现有设置。'); return; }
             configured(await bridge.saveKeys(changes));
-            for (const name of ['default', 'image', 'text']) $(name + '-key').value = '';
+            for (const name of profiles) $(name + '-key').value = '';
             message('Key 已保存，可以关闭设置开始创作。');
         } catch (error) { message(error.message); } finally { button.disabled = false; }
     });
-    action('clear-keys', async () => { if (window.confirm('清除本机已保存的全部 OneYes Key？原任务取回需要重新填写原 Key。')) { configured(await bridge.saveKeys({default:'',image:'',text:''})); message('已清除本机 Key'); } });
+    action('clear-keys', async () => { if (window.confirm('清除本机已保存的全部 OneYes Key？原任务取回需要重新填写原 Key。')) { configured(await bridge.saveKeys(Object.fromEntries(profiles.map(name => [name, ''])))); message('已清除本机 Key'); } });
     $('toggle-key').onclick = () => { const hidden = $('default-key').type === 'password'; $('default-key').type = hidden ? 'text' : 'password'; $('toggle-key').textContent = hidden ? '隐藏' : '显示'; };
     action('open-keys', () => bridge.openKeys());
+    action('register-account', () => bridge.openAccountPage('register'));
+    action('forgot-password', () => bridge.openAccountPage('forgot-password'));
     action('open-data', () => bridge.openData());
     action('check-update', () => bridge.checkUpdate());
     action('install-update', () => bridge.installUpdate());
@@ -181,13 +194,13 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
     $('model-search').oninput = renderModels;
     action('refresh-tasks', async () => {
         const { tasks } = await bridge.tasks(); $('task-list').replaceChildren();
-        if (!tasks.length) $('task-list').textContent = '还没有图片任务。在画布中运行 OneYes 图片节点后，会在这里保存记录。';
+        if (!tasks.length) $('task-list').textContent = '还没有云端任务。运行异步图片或 Grok 视频节点后，会在这里保存记录。';
         const labels = {submitting:'提交结果待核对',unknown:'提交结果待核对',processing:'生成中，可取回',completed:'已完成',failed:'原任务失败',cancelled:'已取消'};
         for (const task of tasks) {
             const row = document.createElement('div'); row.className = 'task-item';
             const title = document.createElement('strong'); title.textContent = `${task.model} · ${labels[task.status] || task.status}`;
             const details = document.createElement('p'); details.textContent = `${new Date(task.created).toLocaleString()}　${task.remote_id || '未收到服务端回执，请先在官网核对'} `;
-            const copy = document.createElement('button'); copy.className='quiet'; copy.textContent='复制本地任务编号'; copy.onclick=async () => { await navigator.clipboard.writeText(task.id); message('已复制，粘贴到“取回原图片任务”节点即可。'); };
+            const copy = document.createElement('button'); copy.className='quiet'; copy.textContent='复制本地任务编号'; copy.onclick=async () => { await navigator.clipboard.writeText(task.id); message(task.kind === 'video' ? '已复制。视频请保持原参数和种子，重新运行原视频节点取回，不会重复生成。' : '已复制，粘贴到“取回原图片任务”节点即可。'); };
             row.append(title, details, copy); $('task-list').append(row);
         }
     });

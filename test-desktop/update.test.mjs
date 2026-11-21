@@ -29,10 +29,10 @@ test('local vault stores no plaintext, serializes changes, supports clearing', a
     try {
         const vault = createVault(directory);
         await Promise.all([vault.save({ default: 'private-default' }), vault.save({ image: 'private-image' })]);
-        assert.deepEqual(await vault.status(), { default: true, image: true, text: false });
+        assert.deepEqual(await vault.status(), { default: true, image: true, text: false, claude: false, gemini: false, grok: false, video: false });
         assert.equal((await readFile(path.join(directory, 'vault.json'), 'utf8')).includes('private'), false);
         await assert.rejects(vault.save({ url: 'https://untrusted.test' }), /无效/);
         await vault.save({ image: '' });
-        assert.deepEqual(await createVault(directory).status(), { default: true, image: false, text: false });
+        assert.deepEqual(await createVault(directory).status(), { default: true, image: false, text: false, claude: false, gemini: false, grok: false, video: false });
     } finally { await rm(directory, { recursive: true, force: true }); }
 });

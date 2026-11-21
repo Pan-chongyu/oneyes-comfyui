@@ -5,6 +5,7 @@ from aiohttp import web
 from server import PromptServer
 
 from .service import OneYesClient, OneYesError
+from .storage import PROFILES
 
 
 client = OneYesClient()
@@ -35,7 +36,7 @@ async def save_settings(request):
     if request.content_type != "application/json":
         raise web.HTTPUnsupportedMediaType()
     data = await request.json()
-    if not isinstance(data, dict) or set(data) - {"default", "image", "text"} or any(not isinstance(value, str) for value in data.values()):
+    if not isinstance(data, dict) or set(data) - set(PROFILES) or any(not isinstance(value, str) for value in data.values()):
         raise web.HTTPBadRequest()
     client.vault.save(data)
     return web.json_response({"configured": client.vault.status()})
@@ -45,7 +46,7 @@ async def save_settings(request):
 async def models(request):
     authorize(request)
     profile = request.match_info["profile"]
-    if profile not in ("default", "image", "text"):
+    if profile not in PROFILES:
         raise web.HTTPBadRequest()
     try:
         return web.json_response(await client.models(profile), headers={"Cache-Control": "no-store"})
@@ -59,3 +60,11 @@ async def models(request):
 async def tasks(request):
     authorize(request)
     return web.json_response({"tasks": client.records()}, headers={"Cache-Control": "no-store"})
+
+
+@PromptServer.instance.routes.get("/oneyes/native-nodes")
+async def native_nodes(request):
+    authorize(request)
+    # Imported here because native adapters share the client owned by these routes.
+    from .native import NATIVE_NODES, NativeNode
+    return web.json_response({node.define_schema().node_id: {"profile": node.profile, "prefixes": node.model_prefixes, "includes": node.model_includes, "excludes": node.model_excludes} for node in NATIVE_NODES if issubclass(node, NativeNode)})

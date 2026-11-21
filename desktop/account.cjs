@@ -40,7 +40,10 @@ function createAccount({ store, vault, fetcher, broker = brokerCall }) {
     }
     async function save(next) { await store.write(next); session = next; }
     async function accept(next, token) {
-        if (next.user.id === session?.user?.id && session.profiles) next.profiles = session.profiles;
+        if (next.user.id === session?.user?.id && session.profiles) {
+            next.profiles = session.profiles;
+            next.native_profiles_configured = session.native_profiles_configured;
+        }
         await vault.clearAccount(next.user.id);
         await save(next);
         access = token; challenge = null; connected = true; error = '';
@@ -144,30 +147,44 @@ function createAccount({ store, vault, fetcher, broker = brokerCall }) {
         if (operation === 'catalog') return { groups: await groups(), keys: (await listKeys()).map(safeKey) };
         if (operation === 'auto-configure') {
             const configured = await vault.status();
-            if (configured.default || (configured.image && configured.text)) return view();
+            if ((configured.default || configured.image && configured.text) && session.native_profiles_configured) return view();
             try {
                 if (!connected) return view();
                 const availableGroups = await groups(), keys = (await listKeys()).filter(usable);
                 const groupFor = value => availableGroups.find(group => group.id === value.group_id) || value.group || {};
                 const rank = value => { const group = groupFor(value); return (/^svip$/i.test(group.name) ? 20 : /^vip$/i.test(group.name) ? 10 : 0) + (value.name === KEY_NAME ? 1 : 0); };
                 let image = keys.filter(value => /^openai$/i.test(groupFor(value).platform)).sort((a, b) => rank(b) - rank(a) || a.id - b.id)[0];
-                if (!image && !configured.image && session.source === 'login') {
+                if (!image && !configured.default && !configured.image && session.source === 'login') {
                     const group = availableGroups.filter(value => /^openai$/i.test(value.platform) && /^(s?vip)$/i.test(value.name)).sort((a, b) => Number(/^svip$/i.test(b.name)) - Number(/^svip$/i.test(a.name)) || a.id - b.id)[0];
                     if (group) image = await call('create-key', { account_id: session.user.id, group_id: group.id });
                 }
                 const text = keys.find(value => /^deepseek$/i.test(groupFor(value).platform) && /^deepseek$/i.test(groupFor(value).name)) || image;
                 const changes = {}, profiles = { ...session.profiles };
-                if (!configured.image && image) { changes.image = await key(image.id); changes.default = changes.image; profiles.image = image.id; }
-                if (!configured.text && text) { changes.text = image?.id === text.id && changes.image ? changes.image : await key(text.id); profiles.text = text.id; }
-                if (Object.keys(changes).length) { await vault.saveAccount(session.user.id, changes); await save({ ...session, profiles }); }
+                if (!configured.default && !configured.image && image) { changes.image = await key(image.id); changes.default = changes.image; profiles.image = image.id; }
+                if (!configured.default && !configured.text && text) { changes.text = image?.id === text.id && changes.image ? changes.image : await key(text.id); profiles.text = text.id; }
+                for (const [profile, platform] of [['claude', /^(anthropic|claude)$/i], ['gemini', /^(gemini|google)$/i], ['grok', /^grok$/i], ['video', /^grok$/i]]) {
+                    if (configured[profile]) continue;
+                    const candidates = keys.filter(value => { const group = groupFor(value); return platform.test(group.platform) && (profile === 'video' ? /^video$/i.test(group.name) : profile === 'grok' ? !/^video$/i.test(group.name) : true); });
+                    const selected = candidates.sort((a, b) => rank(b) - rank(a) || a.id - b.id)[0];
+                    if (selected) { changes[profile] = await key(selected.id); profiles[profile] = selected.id; }
+                }
+                if (Object.keys(changes).length) await vault.saveAccount(session.user.id, changes);
+                await save({ ...session, profiles, native_profiles_configured: true });
                 error = !configured.image && !image ? '已登录，暂无可用的图片 Key；请选择或新建 Key，也可直接打开本地画布。' : '';
             } catch (failure) { error = `已登录，自动配置未完成：${failure.message}。可在下方选择 Key。`; }
             return view();
         }
         if (operation === 'configure') {
             const image = await key(args.image_id), text = args.text_id === args.image_id ? image : await key(args.text_id);
-            await vault.saveAccount(session.user.id, { default: image, image, text });
-            await save({ ...session, profiles: { image: args.image_id, text: args.text_id } });
+            const changes = { default: image, image, text }, profiles = { ...session.profiles, image: args.image_id, text: args.text_id };
+            for (const name of ['claude', 'gemini', 'grok', 'video']) {
+                const id = args[name + '_id'];
+                if (id == null) continue;
+                changes[name] = id ? await key(id) : '';
+                if (id) profiles[name] = id; else delete profiles[name];
+            }
+            await vault.saveAccount(session.user.id, changes);
+            await save({ ...session, profiles });
             connected = true; error = '';
             return { configured: await vault.status() };
         }

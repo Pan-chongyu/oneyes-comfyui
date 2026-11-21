@@ -28,6 +28,9 @@ if (process.platform === 'darwin') {
 await access(path.join(resources, 'engine/oneyes/extension.py'));
 const frontend = JSON.parse(await readFile(path.join(resources, 'frontend/oneyes-frontend.json'), 'utf8'));
 assert.equal(frontend.nativeUserPanel, true);
+assert.equal(frontend.oneYesAccountButton, true);
+assert.match(await readFile(path.join(resources, 'frontend/assets', frontend.authModule), 'utf8'), /openSettings\('account'\)/);
+await access(path.join(resources, 'frontend/oneyes-account-button.js'));
 assert.match(await readFile(path.join(resources, 'frontend/assets', frontend.userPanel), 'utf8'), /mountAccountPanel/);
 await access(path.join(resources, 'engine/oneyes/web/account-panel.html'));
 const python = await bundledPython(resources);

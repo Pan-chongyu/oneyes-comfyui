@@ -8,12 +8,13 @@
 
 ### 主要功能
 
+- **原版 API 节点接入**：适配 19 个原版节点，包含 GPT 图片 / ChatGPT、Claude、Gemini / Nano Banana、Grok 图片与视频及文件 / 高级选项。保留原节点 ID、参数与输出，导入工作流继续连线使用；具体范围见 [原版节点适配](docs/NATIVE_NODES.zh-CN.md)。
 - **OneYes 文生图**：异步接口提交，保存原任务回执；断网或重启后继续取回，不自动重发付费请求。
 - **OneYes 参考图编辑**：二进制上传全部参考图片，保留原分辨率。数量与参数能力由模型决定。
 - **OneYes 取回原图片任务**：使用本地任务编号恢复原结果，无需再生成。
 - **OneYes 文字生成**：通过 OpenAI 兼容 Chat Completions 接口生成提示词或其他文字。
 - **账号登录**：邮箱 / 密码登录、二次验证码、加密保存登录状态并自动恢复；同一用户下打开并登录 OneYes 客户端后，可直接复用登录态。密码不保存，客户端账号令牌不复制到本软件。
-- **Key 与模型管理**：默认 Key、图片 Key、文字 Key 分开配置；Key 使用本机 AES-256-GCM 加密，不写入导出的工作流，不调用 macOS 钥匙串。优先 oneyes.ai 直连线路。
+- **Key 与模型管理**：默认、通用图片 / 文字及 Claude、Gemini、Grok 图片 / 视频 Key 分开配置；Video 分组独立路由，模型选择按当前 Key 权限刷新。Key 使用本机 AES-256-GCM 加密，不写入导出的工作流，不调用 macOS 钥匙串。优先 oneyes.ai 直连线路。
 - **安装即用**：安装包内置独立 Python、CPU 推理库和官方 ComfyUI 前端，首启自动启动画布，无需另装 Python 或在线下载依赖。关闭窗口可留在系统托盘，支持签名 OTA。
 
 ### 下载安装
@@ -28,9 +29,9 @@
 
 1. 从 [Release](https://github.com/Pan-chongyu/oneyes-comfyui/releases/latest) 下载对应安装包，或通过 OneYes 应用中心安装。
 2. 打开后自动启动画布并尝试复用本机 OneYes 客户端登录态；也可直接登录 OneYes 或手动填写 Key。首次连接自动选择 OpenAI 图片 Key 与 DeepSeek / OpenAI 文字 Key，保留已有手动配置。独立登录没有合适图片 Key 时，在可用 OpenAI VIP / SVIP 分组新建或复用 `ComfyUI_工作流` Key；复用模式不新建 Key。
-3. 启动直接进入画布，不先显示独立设置页；从顶部 OneYes 菜单、节点设置按钮或“设置 → 用户”登录与配置，免登录也可使用本地功能。**启动无需联网安装依赖，云端调用仍需网络与可用 Key**。没有内置模型权重，也不会自动下载模型。
-4. 在 ComfyUI 中搜索 `OneYes` 添加节点，在节点中选择可用模型，连接原生“预览图像”或“保存图像”节点后运行。
-5. 重启恢复图片：保留原参数与任务种子重新运行，或在“OneYes 设置 → 图片任务”复制本地任务编号，交给“取回原图片任务”节点。原 Key 必须仍然有效。提交结果不明确时先在官网核对，不会自动重复收费生成。
+3. 启动直接进入画布，不先显示独立设置页；从右上角“OneYes 登录”、顶部 OneYes 菜单、节点设置按钮或“设置 → 用户”登录与配置，免登录也可使用本地功能。**启动无需联网安装依赖，云端调用仍需网络与可用 Key**。没有内置模型权重，也不会自动下载模型。
+4. 搜索 `OneYes` 或已适配的原版节点名称，在节点中选择 OneYes 可用模型，连接原生“预览图像”或“保存图像”等节点后运行。原版 API 节点使用 OneYes，费用以 OneYes 为准。
+5. 重启恢复 GPT / OneYes 图片：保留原参数与任务种子重新运行，或在“OneYes 设置 → 云端任务”复制本地任务编号，交给“取回原图片任务”节点。Grok 视频保持原参数与种子重新运行原节点取回。原 Key 必须仍然有效。提交结果不明确时先在官网核对，不会自动重复收费生成。
 
 内置运行环境使用 CPU；云端生成不需要本地显卡。GPU 用户可按 ComfyUI 官方说明管理自己的 CUDA / ROCm 环境并手动安装本扩展。不要在不受信任的网络开放本机服务。
 
@@ -58,9 +59,11 @@ OneYes ComfyUI is a public fork of ComfyUI with OneYes cloud nodes and accounts 
 
 Included nodes: asynchronous image generation, reference-image editing, original image-task recovery and Chat Completions text generation. Credentials are encrypted locally, kept outside workflows and never sent with image downloads. The model picker loads the current key's available IDs. Separate image/text keys support different OneYes groups.
 
+19 original API nodes now use OneYes transport while preserving their workflow IDs, inputs and outputs: GPT images and ChatGPT Responses, Claude Messages, Gemini text / Nano Banana images, Grok images / video, and their file/config helpers. Platform keys are separate, including a dedicated Video-group key. Native model pickers can refresh from the current OneYes group. Original-resolution references, masks, markup and image alpha are preserved. GPT image and Grok video receipts can resume without another paid submission. Other vendors, GIF/SVG generation and video editing/extension are not yet adapted; availability still depends on OneYes. See the [compatibility table](docs/NATIVE_NODES.zh-CN.md).
+
 Sign in directly with your OneYes email/password and optional two-factor code, or reuse a running OneYes Desktop session on the same OS user. Select existing keys for image and text nodes; direct sign-in can create/reuse a `ComfyUI_工作流` key in an available group. Passwords are not stored. Desktop account tokens are never copied. Encrypted sessions survive restarts; signing out here leaves OneYes Desktop signed in. Manual key configuration remains available. If the official login requires additional website verification, complete it in OneYes Desktop before connecting.
 
-Desktop installers support Windows x64, macOS Apple Silicon and Linux x64 / ARM64. **Standalone Python, CPU PyTorch and the official frontend are bundled; the engine starts automatically without downloading dependencies.** First connection selects suitable existing image/text keys, or creates/reuses a workflow key in an available OpenAI VIP/SVIP group for direct sign-in. Manual keys are preserved. The app opens directly into the canvas without a separate launcher. Sign in, manage keys, browse models and tasks, and update within native Settings → User or the OneYes menu. Local use is available without signing in. Cloud requests require network access and a usable key. No model weights are included or automatically downloaded. GPU inference is available by managing a normal ComfyUI GPU environment from source.
+Desktop installers support Windows x64, macOS Apple Silicon and Linux x64 / ARM64. **Standalone Python, CPU PyTorch and the official frontend are bundled; the engine starts automatically without downloading dependencies.** First connection selects suitable existing image/text keys, or creates/reuses a workflow key in an available OpenAI VIP/SVIP group for direct sign-in. Manual keys are preserved. The app opens directly into the canvas without a separate launcher. The top-right OneYes account button shows your sign-in state and opens native Settings → User. Sign in, manage keys, browse models and tasks, and update there or through the OneYes menu. Registration and password recovery open the OneYes website. Local use is available without signing in. Cloud requests require network access and a usable key. No model weights are included or automatically downloaded. GPU inference is available by managing a normal ComfyUI GPU environment from source.
 
 Image receipts survive restarts. Re-run identical parameters with the same task seed, or use the recovery node with the local task ID from Settings. A missing submission receipt is never silently resubmitted. Automatic updates verify an independent Ed25519-signed manifest and package SHA-256. macOS builds are currently ad-hoc signed, without Apple notarization.
 

@@ -35,7 +35,7 @@ function createEncryptedStore(directory, filename) {
     return { read: async () => { await operation; return read(); }, update, write: values => update(() => values) };
 }
 
-const profiles = ['default', 'image', 'text'];
+const profiles = ['default', 'image', 'text', 'claude', 'gemini', 'grok', 'video'];
 function createVault(directory) {
     const store = createEncryptedStore(directory, 'vault.json');
     function validate(changes) {

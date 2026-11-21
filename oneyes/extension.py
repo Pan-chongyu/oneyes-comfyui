@@ -8,6 +8,7 @@ import comfy.model_management
 from comfy_api.latest import ComfyExtension, io
 
 from .routes import client
+from .native import NATIVE_NODES
 
 
 def output_images(images, task_id):
@@ -75,7 +76,7 @@ class OneYesText(io.ComfyNode):
 
 class OneYesExtension(ComfyExtension):
     async def get_node_list(self):
-        return [OneYesImage, OneYesImageEdit, OneYesRecoverImage, OneYesText]
+        return [OneYesImage, OneYesImageEdit, OneYesRecoverImage, OneYesText, *NATIVE_NODES]
 
 
 async def comfy_entrypoint():

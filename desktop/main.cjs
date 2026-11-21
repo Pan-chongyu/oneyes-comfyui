@@ -86,7 +86,7 @@ else {
             app.quit();
         } });
         session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
-            if (runtime.state().url && details.url.startsWith(runtime.state().url + '/oneyes/') && viewer?.webContents.id === details.webContentsId) details.requestHeaders['X-OneYes-Session'] = runtime.token();
+            if (runtime.state().url && ['/oneyes/', '/api/oneyes/'].some(prefix => details.url.startsWith(runtime.state().url + prefix)) && viewer?.webContents.id === details.webContentsId) details.requestHeaders['X-OneYes-Session'] = runtime.token();
             callback({ requestHeaders: details.requestHeaders });
         });
         session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => callback(permission === 'fullscreen' && details.isMainFrame && contents.mainFrame.url.startsWith(runtime.state().url + '/')));
@@ -102,8 +102,12 @@ else {
         }, true);
         handle('launch', launch);
         handle('keys', () => shell.openExternal('https://oneyes.ai/keys'), true);
+        handle('account-page', page => {
+            if (!['register', 'forgot-password'].includes(page)) throw new Error('账户页面无效');
+            return shell.openExternal('https://oneyes.ai/' + page);
+        }, true);
         handle('data', () => shell.openPath(directory));
-        handle('models', profile => { if (!['default', 'image', 'text'].includes(profile)) throw new Error('Key 类型无效'); return localRequest('models/' + profile); }, true);
+        handle('models', profile => { if (!['default', 'image', 'text', 'claude', 'gemini', 'grok', 'video'].includes(profile)) throw new Error('Key 类型无效'); return localRequest('models/' + profile); }, true);
         handle('tasks', () => localRequest('tasks'), true);
         handle('update-check', () => updater.check(), true);
         handle('update-install', () => updater.apply(), true);

@@ -2,7 +2,7 @@
 
 此应用拥有独立的公开仓库和签名身份，不复用或更换 OneYes Desktop / Canvas 的签名密钥。公钥固定在 `desktop/update-key.cjs`。私钥仅保存在本机忽略目录与 GitHub Actions Secret `COMFY_OTA_PRIVATE_KEY`。
 
-正式构建由 `.github/workflows/oneyes-desktop.yml` 按 `oneyes-vX.Y.Z` 标签启动，并使用相同标签发布 Release，与上游引擎版本分开。四个原生 Runner 先安装真实 ComfyUI CPU 环境，核对四种 OneYes 节点并运行本地工作流，测试通过后才构建。发布任务汇总 Windows x64 EXE、macOS ARM64 DMG / ZIP、Linux x64 / ARM64 AppImage / DEB / RPM，核对九个安装包并为八种 OTA 目标生成签名清单。
+正式构建由 `.github/workflows/oneyes-desktop.yml` 按 `oneyes-vX.Y.Z` 标签启动，并使用相同标签发布 Release，与上游引擎版本分开。四个原生 Runner 先安装真实 ComfyUI CPU 环境，核对四种 OneYes 节点、19 个原版节点适配与本地工作流，测试通过后才构建。发布任务汇总 Windows x64 EXE、macOS ARM64 DMG / ZIP、Linux x64 / ARM64 AppImage / DEB / RPM，核对九个安装包并为八种 OTA 目标生成签名清单。
 
 固定更新地址：`https://github.com/Pan-chongyu/oneyes-comfyui/releases/latest/download/comfy-latest.json`，Detached Ed25519 签名为 `.sig`。每种芯片及 Linux 安装格式独立选择；更新前验证清单签名与包 SHA-256。后台每六小时检查并下载，显示进度、失败重试、安装与自动重新打开；Windows 有独立可视化安装助手。保留断点续传与 Windows blockmap 校验；首版没有可适用的旧版增量基包。
 
@@ -19,3 +19,7 @@ macOS 的 ad-hoc 签名使用 `scripts/sign-macos.cjs` 顺序扫描 Mach-O 文�
 Windows 安装器在安装及静默 OTA 更新后发送 Shell 图标刷新通知；应用身份、安装目录和签名公钥保持一致，旧版本可直接升级到使用 ComfyUI Logo 的新版。
 
 从 0.1.6 起不再提供独立启动设置窗口。单窗口加载引擎后直接显示 ComfyUI 画布，原生“设置 → 用户”集中账户、Key、模型、任务与更新。构建阶段从固定 1.59.10 前端生成定制用户面板；预期模块或导出变化时停止构建，禁止静默丢失账户界面。新前端与引擎一起纳入安装包和签名 OTA。
+
+从 0.1.7 起右上角账号按钮与原登录弹窗入口统一为 OneYes。四个平台必须测试实际点击账号按钮、登录状态与余额更新、固定注册／找回密码链接、上游登录入口重定向。OneYes 会话不写入 Comfy Org 身份存储，不会解锁其付费 API 节点。
+
+同一版本的原版节点适配由 OneYes 扩展注册原节点 ID，保留参数与输出类型；仅扩展层发起 OneYes 请求，不修改核心推理实现。发布前测试 OpenAI 异步图片 / Responses、Anthropic Messages、Gemini generateContent、Grok 图片 / 视频协议，核对平台 Key、原尺寸参考图、遮罩、涂鸦、透明通道、重启恢复与不重复提交。缺少上游能力的供应商不冒充可用节点。模型 / 账号缓存、加密 Key 与原任务文件在 OTA 覆盖升级后保留。

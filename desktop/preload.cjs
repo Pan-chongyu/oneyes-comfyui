@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('oneYesDesktop', {
     },
     openData: () => ipcRenderer.invoke('oneyes:data'),
     openKeys: () => ipcRenderer.invoke('oneyes:keys'),
+    openAccountPage: page => ipcRenderer.invoke('oneyes:account-page', page),
     models: profile => ipcRenderer.invoke('oneyes:models', profile),
     tasks: () => ipcRenderer.invoke('oneyes:tasks'),
     checkUpdate: () => ipcRenderer.invoke('oneyes:update-check'),
