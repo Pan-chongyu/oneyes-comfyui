@@ -35,7 +35,7 @@ function createRuntime({ resources, directory, changed = () => {} }) {
     let processHandle, exit, operation, stopping = false;
     let state = { status: 'idle', phase: '', message: '', url: '' };
     const emit = patch => { state = { ...state, ...patch }; changed({ ...state }); };
-    const env = { ...process.env, PYTHONHOME: prefix, PYTHONNOUSERSITE: '1', PYTHONDONTWRITEBYTECODE: '1', PYTHONUNBUFFERED: '1', ONEYES_DATA_DIR: directory, ONEYES_LOCAL_TOKEN: token, HF_HUB_DISABLE_TELEMETRY: '1', DO_NOT_TRACK: '1', XDG_CACHE_HOME: path.join(directory, 'cache'), HF_HOME: path.join(directory, 'cache/huggingface'), NUMBA_CACHE_DIR: path.join(directory, 'cache/numba') };
+    const env = { ...process.env, PYTHONHOME: prefix, PYTHONUTF8: '1', PYTHONIOENCODING: 'utf-8', PYTHONNOUSERSITE: '1', PYTHONDONTWRITEBYTECODE: '1', PYTHONUNBUFFERED: '1', ONEYES_DATA_DIR: directory, ONEYES_LOCAL_TOKEN: token, HF_HUB_DISABLE_TELEMETRY: '1', DO_NOT_TRACK: '1', XDG_CACHE_HOME: path.join(directory, 'cache'), HF_HOME: path.join(directory, 'cache/huggingface'), NUMBA_CACHE_DIR: path.join(directory, 'cache/numba') };
     delete env.PYTHONPATH; delete env.VIRTUAL_ENV; delete env.ONEYES_API_KEY;
     async function terminate() {
         if (!processHandle?.pid) return;

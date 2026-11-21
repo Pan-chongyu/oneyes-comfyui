@@ -6,6 +6,22 @@ import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 const { bundledPython, createRuntime } = createRequire(import.meta.url)('../desktop/runtime.cjs');
+const { signingPaths } = createRequire(import.meta.url)('../scripts/sign-macos.cjs');
+
+test('macOS signing selects nested Mach-O code and bundles, leaving Python bytecode and media as resources', async t => {
+    const directory = await mkdtemp(path.join(tmpdir(), 'comfy-sign-'));
+    t.after(() => rm(directory, { recursive: true, force: true }));
+    await mkdir(path.join(directory, 'Helper.app/Contents/MacOS'), { recursive: true });
+    await mkdir(path.join(directory, 'python/lib'), { recursive: true });
+    const native = path.join(directory, 'Helper.app/Contents/MacOS/Helper'), library = path.join(directory, 'python/lib/python.dylib');
+    await writeFile(native, Buffer.from('cffaedfe00000000', 'hex'));
+    await writeFile(library, Buffer.from('cafebabe00000002', 'hex'));
+    await writeFile(path.join(directory, 'python/lib/module.pyc'), Buffer.from('cb0d0d0a00000000', 'hex'));
+    await writeFile(path.join(directory, 'picture.png'), Buffer.from('89504e470d0a1a0a', 'hex'));
+    const selected = await signingPaths(directory);
+    assert.deepEqual(new Set(selected), new Set([native, library, path.join(directory, 'Helper.app')]));
+    assert.ok(selected.indexOf(native) < selected.indexOf(path.join(directory, 'Helper.app')));
+});
 
 test('missing or mismatched bundles fail locally with a reinstall action, without downloading', async t => {
     const directory = await mkdtemp(path.join(tmpdir(), 'comfy-bundle-'));

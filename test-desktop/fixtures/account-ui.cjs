@@ -71,6 +71,7 @@ app.on('browser-window-created', (_event, window) => {
             await waitFor(window, `!document.querySelector('#account-summary').hidden && document.querySelector('#account-image').options.length===3 && !document.querySelector('#use-account-keys').disabled`);
             assert.equal(await js(`document.querySelector('#account-image').value`), '8');
             assert.equal(await js(`document.querySelector('#account-text').value`), '9');
+            assert.deepEqual((await js(`window.oneYesDesktop.state()`)).configured, { default: true, image: true, text: true }, 'Login must configure usable keys before manual confirmation');
             await js(`document.querySelector('#account-keys').requestSubmit(document.querySelector('#use-account-keys'))`);
             await waitFor(window, `document.querySelector('#message').textContent.includes('已配置') && !document.querySelector('#use-account-keys').disabled`);
             const state = await js(`window.oneYesDesktop.state()`);

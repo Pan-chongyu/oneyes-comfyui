@@ -1,7 +1,7 @@
 {
   "name": "oneyes-comfyui",
   "productName": "OneYes ComfyUI",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "description": "ComfyUI with OneYes cloud nodes and a desktop runtime manager",
   "author": "OneYes",
@@ -91,6 +91,7 @@
       ],
       "icon": "desktop/resources/icon.icns",
       "identity": "-",
+      "sign": "scripts/sign-macos.cjs",
       "hardenedRuntime": false,
       "gatekeeperAssess": false,
       "category": "public.app-category.graphics-design",
