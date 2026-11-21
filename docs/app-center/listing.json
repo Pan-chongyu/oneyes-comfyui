@@ -1,0 +1,30 @@
+{
+  "summary": "把图片、视频与文字模型串成可复用的节点工作流。保留 ComfyUI 画布与本地节点，接入 OneYes 云端模型；可独立登录使用，安装包内置运行环境。",
+  "description": "快速开始\n1. 安装对应系统的软件，打开后直接进入 ComfyUI 画布，无需另装 Python。\n2. 点击右上角 OneYes 进入“设置 → 用户”，直接登录 OneYes 账号，或手动填写 API Key。也可选择复用本机 OneYes Desktop 的登录状态。\n3. 在模型页读取当前 Key 可用的模型；按需要选择图片、文字或平台专用 Key。登录后可选择已有 Key，或在可用的 OpenAI VIP／SVIP 分组创建、复用 ComfyUI_工作流 Key。\n4. 从模板或空白工作流开始，将输入图片／提示词、生成节点与预览／保存节点连接，选择模型和参数后点击运行。使用本地模型时，先把对应权重放入 ComfyUI 模型目录。\n\n图片任务恢复\n使用 OneYes 异步图片接口的任务会在本机保存回执。断网、重启或结果下载失败后，到“设置 → 用户 → 图片任务”继续取回原任务；无需重新支付生成。提交结果不明时不自动重发，先检查原任务状态。\n\n系统与硬件\n支持 Windows x64、macOS Apple Silicon，以及 Linux x64／ARM64；Linux 提供 AppImage、DEB、RPM。Intel Mac 与 Windows ARM 暂无原生安装包。云端生成需要网络和有权限的 OneYes Key，不依赖本地独立显卡；本地模型的速度和可用功能取决于模型、内存及运行环境。安装包内置 Python、PyTorch CPU 与基础依赖，不包含模型权重，不自动下载模型。macOS 当前为自签名版本，未经 Apple 公证。\n\n账号、数据与更新\n账号会话及 Key 在本机加密保存，不写入导出的工作流；可不登录使用本地功能。软件可脱离 OneYes Desktop 独立运行，主客户端仅用于可选的登录复用。内置签名 OTA，显示下载和安装进度，更新后重新打开，保留用户工作流、模型与配置。云端可用模型、参数、分组权限和费用以 OneYes 实际提供为准。",
+  "presentation": {
+    "description": "用节点搭建自己的 AI 创作流程\nOneYes ComfyUI 是接入 OneYes 的 ComfyUI 社区派生桌面版。把素材输入、提示词、模型调用、图像处理和输出保存连接起来，一套流程可以反复使用，也可导入已有的 ComfyUI 工作流继续编辑。保留原生画布、参数面板、队列、预览及本地节点的操作方式。\n\n可以用来做什么\n• 参考图编辑：上传人物、商品或场景图片，通过提示词调整发型、妆容、风格与画面细节；可连接遮罩等原生节点，支持的编辑方式由所选模型决定。\n• 视觉创作：从文字生成插画、海报素材、产品概念图，再连接预览、后期处理与保存节点，形成自己的创作流程。\n• 文字辅助：使用 ChatGPT、Claude、Gemini 等已适配接口整理提示词、撰写说明和处理文字，并与图片工作流组合。\n• 视频创作：通过已适配的 Grok 视频节点使用 OneYes 提供的视频能力，连接参考素材并保存结果；模型是否可用取决于账号分组。\n• 本地处理：使用 ComfyUI 原生图像处理、超分及音视频／3D 相关节点，或加载本地模型；需要权重或额外硬件的节点仍需自行准备。\n\n原生工作流，统一 OneYes 接入\n已适配 GPT 图片与 ChatGPT Responses、Claude Messages、Gemini／Nano Banana、Grok 图片与视频等 19 个原版节点，保留原节点名称、接口参数、插槽与输出，另提供 OneYes 通用节点。支持按平台配置 Key、读取可用模型，以及图片编辑中的多参考图、遮罩、涂鸦与透明通道等参数；具体支持范围随模型不同。\n\n独立使用，从安装到创作\n安装包内置 Python、PyTorch CPU、基础节点依赖和前端，打开即进入画布。可直接登录 OneYes、在软件内完成网站验证，或填写自己的 Key；不要求安装主客户端。账号、模型、Key、图片任务和更新集中在原生设置中，减少来回切换。\n\n为持续创作保留进度\n异步图片任务保存原回执，可在断网或重启后继续查询、下载；已生成素材下载失败时可以继续取回。工作流和本机配置独立保存，签名 OTA 更新后保留数据。\n\n使用前了解\n本应用是独立的 OneYes 集成版本，并非 Comfy Org 官方发行版。保留本地节点和自定义节点机制，不代表所有 Comfy Org 付费 API 或第三方专有服务均已接入；例如 ElevenLabs 语音生成、克隆等当前尚不支持。第三方扩展可能另有依赖。截图为本版本真实界面：云端编辑图展示工作流配置，本地 Canny 图展示实际运行结果。",
+    "source_url": "https://github.com/Pan-chongyu/oneyes-comfyui/tree/master/docs/app-center",
+    "screenshots": [
+      {
+        "url": "https://raw.githubusercontent.com/Pan-chongyu/oneyes-comfyui/b2fcc0cefdb08d686e7af511890c8dd2cbb88fba/docs/app-center/screenshots/image-workflow-69b9077efef5.webp",
+        "caption": "参考图编辑工作流：连接图片、GPT 图片节点与保存节点（配置示例，未执行云端生成）",
+        "source_url": "https://github.com/Pan-chongyu/oneyes-comfyui/blob/b2fcc0cefdb08d686e7af511890c8dd2cbb88fba/docs/app-center/SCREENSHOTS.md"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/Pan-chongyu/oneyes-comfyui/b2fcc0cefdb08d686e7af511890c8dd2cbb88fba/docs/app-center/screenshots/standalone-account-105fde7901d7.webp",
+        "caption": "独立账号入口：直接登录 OneYes，也可使用网站登录或复用本机客户端账号",
+        "source_url": "https://github.com/Pan-chongyu/oneyes-comfyui/blob/b2fcc0cefdb08d686e7af511890c8dd2cbb88fba/docs/app-center/SCREENSHOTS.md"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/Pan-chongyu/oneyes-comfyui/b2fcc0cefdb08d686e7af511890c8dd2cbb88fba/docs/app-center/screenshots/encrypted-keys-db521fe45e63.webp",
+        "caption": "手动填写 Key：本机加密保存，可分别设置图片、文字及平台 Key",
+        "source_url": "https://github.com/Pan-chongyu/oneyes-comfyui/blob/b2fcc0cefdb08d686e7af511890c8dd2cbb88fba/docs/app-center/SCREENSHOTS.md"
+      },
+      {
+        "url": "https://raw.githubusercontent.com/Pan-chongyu/oneyes-comfyui/b2fcc0cefdb08d686e7af511890c8dd2cbb88fba/docs/app-center/screenshots/local-workflow-105754a130a0.webp",
+        "caption": "本地节点处理：参考图片经 Canny 边缘检测后预览（本机实际运行结果）",
+        "source_url": "https://github.com/Pan-chongyu/oneyes-comfyui/blob/b2fcc0cefdb08d686e7af511890c8dd2cbb88fba/docs/app-center/SCREENSHOTS.md"
+      }
+    ]
+  }
+}

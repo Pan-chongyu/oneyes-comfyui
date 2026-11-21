@@ -1,3 +1,10 @@
+## 应用中心资料维护
+
+- 用户长期要求：应用中心已维护的介绍、用途、截图、图标及排序，不得在常规发版时重写、缩减或清空。用户明确要求修改介绍时，才更新对应内容。
+- 常规版本同步必须使用 `scripts/catalog-entry.mjs` 的 `catalogRelease`，从管理平台读取现有条目，仅更新版本、下载包、校验值及检测版本；保留其余字段和修订版本，避免覆盖后台人工维护的内容。
+- 经确认的文案及截图来源保存在 `docs/app-center/`。截图使用固定 Git 提交地址，不能使用临时文件地址、虚构的生成结果或包含真实账号／Key 的画面。
+- 本规则是本次用户“以后不要乱改”的持久记录。纯应用中心资料更新不改变客户端版本或覆盖已有正式 OTA；客户端程序发生修改时仍按完整签名 OTA 流程交付。
+
 ## Engineering Style
 
 - Keep changes small and direct. Most fixes should touch the narrowest code path

@@ -12,6 +12,8 @@
 
 不要手工覆盖正式 Release 包。发布完成后必须核对公开固定地址签名、九个安装包与应用中心下载 SHA-256。
 
+应用中心介绍和截图按用户长期要求固定维护，基线位于 `docs/app-center/listing.json`，截图使用已提交的固定版本链接。后续同步使用 `scripts/catalog-entry.mjs` 的 `catalogRelease`，读取现有应用后只更新版本、下载包和检测版本；摘要、用途、使用步骤、截图及说明、图标、安装方式与排序全部保留，不以仓库模板覆盖管理后台的人工维护内容。`catalogPresentation` 仅在用户明确要求修改介绍时使用，不能在常规发布路径调用。资料更新不需要更改客户端版本，正式安装包及 OTA 保持原有签名。
+
 发布前运行 `npm run prepare:desktop`、`npm run prepare:runtime`、`npm run prepare:frontend`；运行环境准备只在构建阶段下载并组装固定 Python 3.12.16 与依赖。四个平台必须通过移动到中文 / 空格路径后的离线冷启动测试，并执行全部四类 OneYes 节点和原生工作流。打包后再次导入资源目录内的 PyTorch / 前端依赖，验证实际使用私有 Python 目录；macOS 额外验证启动依赖后签名仍有效。客户端不在应用包内写入 Python 字节码，缓存保存在用户目录。
 
 macOS 的 ad-hoc 签名使用 `scripts/sign-macos.cjs` 顺序扫描 Mach-O 文件并从内到外签名，不将图片、文档或 Python 字节码当作可执行程序；全部资源由最外层应用签名封存，最后执行 `codesign --verify --deep --strict`。
