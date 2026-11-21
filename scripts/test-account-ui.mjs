@@ -12,7 +12,7 @@ env.COMFY_ACCOUNT_TEST_RESULT = path.join(directory, 'result');
 const fixture = path.resolve('test-desktop/fixtures/account-ui.cjs');
 const command = process.platform === 'linux' ? 'xvfb-run' : electron;
 const args = process.platform === 'linux' ? ['-a', electron, '--no-sandbox', fixture] : [fixture];
-const child = spawn(command, args, { env, stdio: 'inherit', windowsHide: true });
+const child = spawn(command, args, { env, stdio: 'inherit', windowsHide: true, timeout: 180000 });
 child.on('error', error => { console.error(error.message); process.exitCode = 1; });
 child.on('exit', async (code, signal) => {
     try {

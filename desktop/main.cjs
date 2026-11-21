@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, Tray, ipcMain, shell, nativeImage, net, session } = require('electron');
+const { app, BrowserWindow, Menu, Tray, ipcMain, shell, nativeImage, net, session, dialog } = require('electron');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
@@ -12,7 +12,7 @@ const { prepareInstall } = require('./update-install.cjs');
 app.setName('OneYes ComfyUI');
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-    let viewer, tray, runtime, vault, account, updater, pendingSection, canvasLoading, quitting = false, stopped = false;
+    let viewer, tray, runtime, vault, account, updater, pendingSection, canvasLoading, shutdown, quitting = false, stopped = false;
     const bootURL = pathToFileURL(path.join(__dirname, 'boot.html')).href;
     const send = () => { if (viewer && !viewer.isDestroyed()) viewer.webContents.send('oneyes:state', state()); };
     const state = () => ({ runtime: runtime.state(), update: updater.state(), account: account.state(), version: app.getVersion(), platform: process.platform, arch: process.arch });
@@ -31,11 +31,23 @@ else {
         pendingSection = undefined;
     }
     function showWindow() {
+        if (quitting) return;
         if (!viewer || viewer.isDestroyed()) {
             viewer = new BrowserWindow({ width: 1440, height: 960, minWidth: 740, minHeight: 620, backgroundColor: '#18181a', title: 'OneYes ComfyUI', icon: path.join(__dirname, 'resources/icon.png'), webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
             viewer.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
             viewer.webContents.on('will-navigate', (event, url) => { if (url !== bootURL && !canvasURL(url)) event.preventDefault(); });
             viewer.webContents.on('did-finish-load', () => { if (canvasURL(viewer.webContents.getURL())) openPendingSettings(); });
+            viewer.webContents.on('will-prevent-unload', event => {
+                if (!quitting) return;
+                const choice = dialog.showMessageBoxSync(viewer, {
+                    type: 'question', title: '退出 OneYes ComfyUI',
+                    message: '工作流有未保存的修改，是否退出？',
+                    detail: '选择“返回保存”可继续编辑并先保存工作流。',
+                    buttons: ['返回保存', '退出'], defaultId: 0, cancelId: 0,
+                });
+                if (choice === 1) event.preventDefault();
+                else { quitting = false; showWindow(); }
+            });
             viewer.on('close', event => { if (!quitting) { event.preventDefault(); viewer.hide(); } });
             void viewer.loadURL(bootURL);
         }
@@ -44,11 +56,13 @@ else {
     async function launch() {
         try {
             await runtime.launch();
+            if (quitting || viewer.isDestroyed()) return;
             if (runtime.state().status === 'ready' && !canvasURL(viewer.webContents.getURL())) {
                 canvasLoading ||= viewer.loadURL(runtime.state().url).finally(() => { canvasLoading = undefined; });
                 await canvasLoading;
             }
         } catch {
+            if (quitting || viewer.isDestroyed()) return;
             if (viewer.webContents.getURL() !== bootURL) await viewer.loadURL(bootURL);
         }
     }
@@ -129,11 +143,14 @@ else {
     });
     app.on('activate', () => { if (runtime) showWindow(); });
     app.on('window-all-closed', () => {});
-    app.on('before-quit', event => {
-        quitting = true;
+    app.on('before-quit', () => { quitting = true; });
+    app.on('will-quit', event => {
         if (stopped) return;
         event.preventDefault();
+        if (shutdown) return;
         updater?.close();
-        void runtime?.stop().finally(() => { stopped = true; app.quit(); });
+        shutdown = (runtime ? runtime.stop() : Promise.resolve())
+            .catch(error => console.error('无法停止 ComfyUI 引擎：', error))
+            .finally(() => { stopped = true; tray?.destroy(); app.quit(); });
     });
 }

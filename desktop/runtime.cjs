@@ -60,7 +60,9 @@ function createRuntime({ resources, directory, changed = () => {} }) {
             await fs.copyFile(path.join(engine, 'oneyes/custom_node.py'), path.join(extension, '__init__.py'));
             await fs.cp(path.join(engine, 'oneyes/web'), path.join(extension, 'web'), { recursive: true, force: true });
             const port = await availablePort(), url = `http://127.0.0.1:${port}`;
+            if (stopping) return state;
             emit({ status: 'starting', phase: '启动 ComfyUI', message: '正在加载节点与画布', url });
+            if (stopping) return state;
             const child = spawn(python, [path.join(engine, 'main.py'), '--listen', '127.0.0.1', '--port', String(port), '--cpu', '--disable-auto-launch', '--disable-partner-nodes', '--front-end-root', path.join(resources, 'frontend'), '--base-directory', data], { cwd: engine, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
             processHandle = child;
             let ended = false, log = '';
@@ -75,6 +77,7 @@ function createRuntime({ resources, directory, changed = () => {} }) {
                     const response = await fetch(`${url}/object_info/OneYesImage`, { signal: AbortSignal.timeout(3000) });
                     if (response.ok) info = await response.json();
                 } catch {}
+                if (stopping) return state;
                 if (info?.OneYesImage) { emit({ status: 'ready', phase: '就绪', message: '画布已就绪', url }); return state; }
                 if (info) { await terminate(); break; }
                 await new Promise(resolve => setTimeout(resolve, 500));
@@ -91,6 +94,7 @@ function createRuntime({ resources, directory, changed = () => {} }) {
         async stop() {
             stopping = true;
             await terminate();
+            await operation?.catch(() => {});
             emit({ status: 'idle', phase: '', message: '', url: '' });
         },
     };

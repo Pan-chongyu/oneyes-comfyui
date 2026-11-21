@@ -54,7 +54,7 @@ jobs:
       - name: Bundle standalone Python and all engine dependencies
         run: npm run prepare:runtime
       - run: npm run prepare:frontend
-      - name: Verify native canvas settings, login and desktop session reuse
+      - name: Verify native canvas, accounts, tray and confirmed quit
         run: npm run test:account-ui
       - name: Start the real engine and execute a local workflow
         run: npm run test:engine

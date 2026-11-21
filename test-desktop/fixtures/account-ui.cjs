@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell } = require('electron');
+const { app, BrowserWindow, shell, Menu, dialog } = require('electron');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -23,10 +23,16 @@ console.log('Starting isolated account UI test.');
 const openedPages = [];
 shell.openExternal = async url => { openedPages.push(url); };
 const runtime = require('../../desktop/runtime.cjs'), createRuntime = runtime.createRuntime;
-runtime.createRuntime = options => createRuntime({ ...options, changed: state => {
-    options.changed(state);
-    if (state.status === 'error') { console.error('Engine startup failed:', state.message); app.quit(); }
-} });
+let engine, stopCalls = 0;
+runtime.createRuntime = options => {
+    engine = createRuntime({ ...options, changed: state => {
+        options.changed(state);
+        if (state.status === 'error') { console.error('Engine startup failed:', state.message); app.quit(); }
+    } });
+    const stop = engine.stop;
+    engine.stop = () => { stopCalls++; return stop(); };
+    return engine;
+};
 const service = require('../../desktop/account.cjs'), createAccount = service.createAccount;
 let shared = false, identity = 17, passed = false;
 const rendererErrors = [];
@@ -192,17 +198,50 @@ app.on('browser-window-created', (_event, window) => {
             untrusted.destroy();
             assert.deepEqual(rendererErrors, [], 'Native OneYes integration must load without renderer errors');
             console.log('Native ComfyUI: direct canvas startup, integrated User settings, login + 2FA, group selection, encrypted keys, desktop reuse, identity change, menu navigation and IPC authorization passed.');
+            window.close();
+            assert.equal(window.isDestroyed(), false, 'The window close button must keep the app running in the tray');
+            assert.equal(window.isVisible(), false);
+            assert.equal(engine.state().status, 'ready');
+            const menu = Menu.getApplicationMenu().items[0].submenu.items;
+            menu.find(item => item.label === '打开画布').click();
+            assert.equal(window.isVisible(), true);
+            await js(`window.addEventListener('beforeunload', event => { event.preventDefault(); event.returnValue = ''; })`);
+            let choice = 0, confirmations = 0;
+            dialog.showMessageBoxSync = (parent, options) => {
+                assert.equal(parent, window);
+                assert.deepEqual(options.buttons, ['返回保存', '退出']);
+                assert.equal(options.cancelId, 0);
+                confirmations++;
+                return choice;
+            };
+            const prevented = new Promise(resolve => window.webContents.once('will-prevent-unload', resolve));
+            menu.find(item => item.label === '退出').click();
+            await prevented;
+            assert.equal(confirmations, 1, 'An unsaved workflow must offer an actionable native confirmation');
+            assert.equal(stopCalls, 0, 'Cancelling quit must leave the engine and updater running');
+            assert.equal(engine.state().status, 'ready');
+            assert.equal((await js(`fetch('/object_info/OneYesImage').then(r=>r.status)`)), 200);
+            window.close();
+            assert.equal(window.isDestroyed(), false, 'Cancelling quit must restore ordinary close-to-tray behavior');
+            menu.find(item => item.label === '打开画布').click();
+            choice = 1;
             passed = true;
+            app.quit();
         } catch (error) {
             console.error(error);
             console.error('Native metadata:', await js(`fetch('/oneyes/native-nodes').then(async r=>({status:r.status,text:(await r.text()).slice(0,200)}))`));
             console.error(await js(`JSON.stringify({buttons:[...document.querySelectorAll('[data-testid="oneyes-account-button"]')].map(b=>({text:b.textContent,rect:b.getBoundingClientRect().toJSON()})),dialogs:[...document.querySelectorAll('[role="dialog"]')].map(e=>e.textContent.slice(0,180))})`));
             if (process.env.COMFY_UI_SCREENSHOT) fs.writeFileSync(process.env.COMFY_UI_SCREENSHOT, (await window.webContents.capturePage()).toPNG());
         }
-        finally { window.destroy(); app.quit(); }
+        finally { if (!passed) { window.destroy(); app.quit(); } }
     });
 });
-app.on('will-quit', () => {
+app.on('quit', () => {
+    if (passed) {
+        assert.equal(engine.state().status, 'idle', 'The engine must stop before the application exits');
+        assert.equal(stopCalls, 1, 'A confirmed quit must stop the engine exactly once');
+        console.log('Native quit: close to tray, reopen, unsaved-workflow cancellation and confirmed quit with engine cleanup passed.');
+    }
     process.exitCode = passed ? 0 : 1;
     if (passed && process.env.COMFY_ACCOUNT_TEST_RESULT) fs.writeFileSync(process.env.COMFY_ACCOUNT_TEST_RESULT, 'passed');
     try { fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); } catch {}
