@@ -1,12 +1,11 @@
-OneYes ComfyUI v0.1.5，基于 ComfyUI 0.46.0。
+OneYes ComfyUI v0.1.6，基于 ComfyUI 0.46.0。
 
-- 安装包内置 Python、PyTorch CPU、全部引擎依赖和官方前端，安装后自动启动，无需另装 Python 或等待下载依赖。
-- 自动复用本机 OneYes 登录态；直接登录后自动选择可用图片 / 文字 Key，已有手动配置保持不变。独立登录可自动创建 / 复用工作流 Key。
-- 配置完成自动打开画布；不登录也能打开本地画布。云端生成仍需网络与可用 Key，本地模型权重不包含在安装包中。
-- Windows 内置本地 C++ 运行库；Python 缓存与数据保存在用户目录，更新保留工作流、图片任务与 Key。
-- 四个平台验证全新用户、中文 / 空格安装路径的离线启动、原生与 OneYes 节点执行，以及打包后运行库导入。
-- 修复英文 Windows 下中文安装路径的编码问题；macOS 逐个扫描并签名原生组件，避免完整依赖打包时文件句柄耗尽。v0.1.4 构建未发布。
+- 去除独立的启动设置窗口，打开软件直接加载 ComfyUI 画布，无需先登录或填写 Key。
+- 原生“设置 → 用户”改为 OneYes 账户页：登录、二次验证、复用客户端登录态、自动／手动 Key 配置、可用模型、图片任务与更新统一在画布内操作。
+- 顶部 OneYes 菜单、系统菜单、节点设置按钮均复用原生设置框；托盘直接返回画布。
+- 继续内置 Python、PyTorch CPU、完整引擎依赖；首次启动无需下载依赖。保留原工作流、本地模型与自定义节点。
+- 四个平台用真实引擎验证免登录启动、原生设置切换、账户与 Key、菜单导航和权限隔离，再构建签名 OTA。
 
-支持 Windows x64、macOS Apple Silicon、Linux x64 / ARM64；Linux 可选 AppImage、DEB、RPM。安装包文件名标注系统与架构，全部提供签名 OTA。macOS 当前为 ad-hoc 自签名，未经过 Apple 公证。
+支持 Windows x64、macOS Apple Silicon、Linux x64／ARM64；Linux 提供 AppImage、DEB、RPM。更新保留登录状态、Key、工作流和任务。macOS 当前为 ad-hoc 自签名，未经过 Apple 公证。
 
-完整源码见 Source.tar.gz；ComfyUI 引擎采用 GPL-3.0-or-later，图标来源与授权见仓库 docs/THIRD_PARTY.md。
+完整源码见 Source.tar.gz；ComfyUI 引擎采用 GPL-3.0-or-later，图标来源与授权见 docs/THIRD_PARTY.md。

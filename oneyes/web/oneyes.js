@@ -20,8 +20,8 @@ function dialog(title) {
     return panel;
 }
 
-async function showSettings() {
-    if (window.oneYesDesktop) return window.oneYesDesktop.openSettings();
+async function showSettings(section = 'account') {
+    if (window.oneYesDesktop) return (await import('/oneyes-native.js')).openSettings(section);
     const panel = dialog("OneYes 设置");
     const note = document.createElement("p"); note.textContent = "Key 仅保存在本机，不写入工作流。图片与文字可使用不同分组的 Key。"; panel.append(note);
     const fields = {};
@@ -65,11 +65,24 @@ async function chooseModel(node) {
 
 app.registerExtension({
     name: "OneYes.Integration",
+    commands: window.oneYesDesktop ? [
+        { id: 'OneYes.Account', label: 'OneYes 账户与 Key', function: () => showSettings() },
+        { id: 'OneYes.Models', label: 'OneYes 可用模型', function: () => showSettings('models') },
+        { id: 'OneYes.Tasks', label: 'OneYes 图片任务', function: () => showSettings('tasks') },
+        { id: 'OneYes.Updates', label: 'OneYes 软件更新', function: () => showSettings('updates') },
+    ] : [],
+    menuCommands: window.oneYesDesktop ? [{ path: ['OneYes'], commands: ['OneYes.Account', 'OneYes.Models', 'OneYes.Tasks', 'OneYes.Updates'] }] : [],
+    async init() {
+        if (window.oneYesDesktop && !app.ui.settings.getSettingValue('Comfy.TutorialCompleted')) await app.ui.settings.setSettingValueAsync('Comfy.TutorialCompleted', true);
+    },
     async setup() {
         const style = document.createElement("style");
         style.textContent = `.oneyes-dialog{background:var(--comfy-menu-bg,#202024);color:var(--input-text,#eee);border:1px solid #6666;border-radius:14px;padding:24px;width:min(520px,90vw);max-height:80vh}.oneyes-dialog::backdrop{background:#0009}.oneyes-dialog h2{font-size:19px;margin:0 70px 20px 0}.oneyes-dialog label{display:block;margin:16px 0 6px}.oneyes-dialog input{display:block;width:100%;box-sizing:border-box;margin:7px 0;padding:10px;background:var(--comfy-input-bg,#303035);color:inherit;border:1px solid #8886;border-radius:7px}.oneyes-dialog button{padding:9px 13px;border-radius:7px;cursor:pointer}.oneyes-close{position:absolute;right:20px;top:18px}.oneyes-models{display:grid;gap:5px;max-height:48vh;overflow:auto}.oneyes-models button{text-align:left;overflow-wrap:anywhere}.oneyes-dialog p{line-height:1.6;font-size:13px}`;
         document.head.append(style);
-        app.ui.settings.addSetting({id:"OneYes.Settings", name:"OneYes API Key", type: () => { const button = document.createElement("button"); button.textContent="打开 OneYes 设置"; button.onclick=showSettings; return button; }});
+        if (window.oneYesDesktop) {
+            const { openSettings } = await import('/oneyes-native.js');
+            window.oneYesDesktop.onOpenSettings(openSettings);
+        } else app.ui.settings.addSetting({id:"OneYes.Settings", name:"OneYes API Key", type: () => { const button = document.createElement("button"); button.textContent="打开 OneYes 设置"; button.onclick=showSettings; return button; }});
     },
     nodeCreated(node) {
         if (!["OneYesImage", "OneYesImageEdit", "OneYesText"].includes(node.comfyClass)) return;

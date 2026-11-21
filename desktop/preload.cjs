@@ -1,10 +1,20 @@
 const { contextBridge, ipcRenderer } = require('electron');
+let pendingSection, openSettings;
+ipcRenderer.on('oneyes:open-settings', (_event, section) => {
+    if (openSettings) openSettings(section);
+    else pendingSection = section;
+});
 contextBridge.exposeInMainWorld('oneYesDesktop', {
     state: () => ipcRenderer.invoke('oneyes:state'),
     saveKeys: changes => ipcRenderer.invoke('oneyes:save-keys', changes),
     account: (operation, args) => ipcRenderer.invoke('oneyes:account', operation, args),
     launch: () => ipcRenderer.invoke('oneyes:launch'),
-    openSettings: () => ipcRenderer.invoke('oneyes:settings'),
+    openSettings: section => ipcRenderer.invoke('oneyes:settings', section),
+    onOpenSettings: callback => {
+        openSettings = callback;
+        if (pendingSection) { callback(pendingSection); pendingSection = undefined; }
+        return () => { if (openSettings === callback) openSettings = undefined; };
+    },
     openData: () => ipcRenderer.invoke('oneyes:data'),
     openKeys: () => ipcRenderer.invoke('oneyes:keys'),
     models: profile => ipcRenderer.invoke('oneyes:models', profile),

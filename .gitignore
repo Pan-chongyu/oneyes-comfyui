@@ -30,6 +30,7 @@ node_modules/
 /desktop/bin/
 /desktop/engine/
 /desktop/python/
+/desktop/frontend/
 /.runtime/
 /release/
 /desktop-smoke-result.json

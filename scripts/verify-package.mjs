@@ -26,6 +26,10 @@ if (process.platform === 'darwin') {
     resources = path.resolve(`dist/${folder}/resources`);
 }
 await access(path.join(resources, 'engine/oneyes/extension.py'));
+const frontend = JSON.parse(await readFile(path.join(resources, 'frontend/oneyes-frontend.json'), 'utf8'));
+assert.equal(frontend.nativeUserPanel, true);
+assert.match(await readFile(path.join(resources, 'frontend/assets', frontend.userPanel), 'utf8'), /mountAccountPanel/);
+await access(path.join(resources, 'engine/oneyes/web/account-panel.html'));
 const python = await bundledPython(resources);
 const result = JSON.parse(execFileSync(python, ['-I', '-B', '-c', 'import sys,json,torch,torchvision,aiohttp,cryptography,comfyui_frontend_package; print(json.dumps({"prefix":sys.prefix,"torch":torch.__file__,"tensor":int(torch.ones(2).sum().item())}))'], { encoding: 'utf8', windowsHide: true }));
 assert.equal(path.resolve(result.prefix), path.join(resources, 'python'));

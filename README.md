@@ -4,7 +4,7 @@
 
 ## 中文
 
-基于 [ComfyUI](https://github.com/Comfy-Org/ComfyUI) 的公开派生版本。保留原有节点工作流、本地模型和自定义节点，支持直接登录 OneYes、复用 OneYes 客户端登录态，以及手动配置 Key。
+基于 [ComfyUI](https://github.com/Comfy-Org/ComfyUI) 的公开派生版本。保留原有节点工作流、本地模型和自定义节点，支持直接登录 OneYes、复用 OneYes 客户端登录态，以及手动配置 Key。打开后直接进入 ComfyUI 画布，账户、Key、模型、任务和更新整合在原生“设置 → 用户”中。
 
 ### 主要功能
 
@@ -28,7 +28,7 @@
 
 1. 从 [Release](https://github.com/Pan-chongyu/oneyes-comfyui/releases/latest) 下载对应安装包，或通过 OneYes 应用中心安装。
 2. 打开后自动启动画布并尝试复用本机 OneYes 客户端登录态；也可直接登录 OneYes 或手动填写 Key。首次连接自动选择 OpenAI 图片 Key 与 DeepSeek / OpenAI 文字 Key，保留已有手动配置。独立登录没有合适图片 Key 时，在可用 OpenAI VIP / SVIP 分组新建或复用 `ComfyUI_工作流` Key；复用模式不新建 Key。
-3. 配置好后自动打开画布；无需云端功能时，也可直接点击“打开画布”使用本地功能。**启动无需联网安装依赖，云端调用仍需网络与可用 Key**。没有内置模型权重，也不会自动下载模型。
+3. 启动直接进入画布，不先显示独立设置页；从顶部 OneYes 菜单、节点设置按钮或“设置 → 用户”登录与配置，免登录也可使用本地功能。**启动无需联网安装依赖，云端调用仍需网络与可用 Key**。没有内置模型权重，也不会自动下载模型。
 4. 在 ComfyUI 中搜索 `OneYes` 添加节点，在节点中选择可用模型，连接原生“预览图像”或“保存图像”节点后运行。
 5. 重启恢复图片：保留原参数与任务种子重新运行，或在“OneYes 设置 → 图片任务”复制本地任务编号，交给“取回原图片任务”节点。原 Key 必须仍然有效。提交结果不明确时先在官网核对，不会自动重复收费生成。
 
@@ -46,21 +46,21 @@ python -m oneyes.configure
 python main.py --cpu --listen 127.0.0.1 --disable-partner-nodes
 ```
 
-桌面开发：Node.js 24，`npm ci`、`npm run prepare:desktop`、`npm run prepare:runtime`、`npm start`。依赖仅在准备安装包时下载；Windows 构建机需 Visual Studio C++ 可再发行文件以打包本地运行库。测试：`npm test`、`npm run test:python`、`npm run test:engine`。真实引擎测试会将完整环境移动到含中文与空格的新路径，在离线配置、全新用户目录下运行，不发送付费生成请求。
+桌面开发：Node.js 24，`npm ci`、`npm run prepare:desktop`、`npm run prepare:runtime`、`npm run prepare:frontend`、`npm start`。依赖仅在准备安装包时下载；Windows 构建机需 Visual Studio C++ 可再发行文件以打包本地运行库。测试：`npm test`、`npm run test:python`、`npm run test:engine`。真实引擎测试会将完整环境移动到含中文与空格的新路径，在离线配置、全新用户目录下运行，不发送付费生成请求。
 
-`npm run test:account-ui` 在隔离的 Electron 窗口中检查登录、二次验证、选择 Key、客户端连接与账号切换，使用测试接口，不发送真实密码或生成请求。登录接口启用官网人机验证或登录协议时，请在 OneYes 客户端完成验证后复用；不会绕过官网验证。退出本软件会清除该账号导入的 Key，保留手动 Key，不会退出主客户端。切换 Key 后取回历史任务仍需原 Key。
+`npm run test:account-ui` 启动真实 ComfyUI 与隔离用户目录，检查免登录直达画布、原生用户页、菜单复用、登录、二次验证、选择 Key、客户端连接与账号切换，使用测试接口，不发送真实密码或生成请求。登录接口启用官网人机验证或登录协议时，请在 OneYes 客户端完成验证后复用；不会绕过官网验证。退出本软件会清除该账号导入的 Key，保留手动 Key，不会退出主客户端。切换 Key 后取回历史任务仍需原 Key。
 
 Key 存储文件与本机主密钥受用户目录权限保护；能读取该用户全部文件的进程仍可解密，不能视为硬件安全存储。任务记录和原图保存在本机，不上传诊断信息。模型、工作流与数据不会随覆盖升级删除。
 
 ## English
 
-OneYes ComfyUI is a public fork of ComfyUI with OneYes cloud nodes and a desktop runtime manager. Original local-model nodes, workflows and custom nodes are preserved.
+OneYes ComfyUI is a public fork of ComfyUI with OneYes cloud nodes and accounts integrated into native Settings → User. Original local-model nodes, workflows and custom nodes are preserved.
 
 Included nodes: asynchronous image generation, reference-image editing, original image-task recovery and Chat Completions text generation. Credentials are encrypted locally, kept outside workflows and never sent with image downloads. The model picker loads the current key's available IDs. Separate image/text keys support different OneYes groups.
 
 Sign in directly with your OneYes email/password and optional two-factor code, or reuse a running OneYes Desktop session on the same OS user. Select existing keys for image and text nodes; direct sign-in can create/reuse a `ComfyUI_工作流` key in an available group. Passwords are not stored. Desktop account tokens are never copied. Encrypted sessions survive restarts; signing out here leaves OneYes Desktop signed in. Manual key configuration remains available. If the official login requires additional website verification, complete it in OneYes Desktop before connecting.
 
-Desktop installers support Windows x64, macOS Apple Silicon and Linux x64 / ARM64. **Standalone Python, CPU PyTorch and the official frontend are bundled; the engine starts automatically without downloading dependencies.** First connection selects suitable existing image/text keys, or creates/reuses a workflow key in an available OpenAI VIP/SVIP group for direct sign-in. Manual keys are preserved. The canvas opens automatically once configured; local use is available without signing in. Cloud requests require network access and a usable key. No model weights are included or automatically downloaded. GPU inference is available by managing a normal ComfyUI GPU environment from source.
+Desktop installers support Windows x64, macOS Apple Silicon and Linux x64 / ARM64. **Standalone Python, CPU PyTorch and the official frontend are bundled; the engine starts automatically without downloading dependencies.** First connection selects suitable existing image/text keys, or creates/reuses a workflow key in an available OpenAI VIP/SVIP group for direct sign-in. Manual keys are preserved. The app opens directly into the canvas without a separate launcher. Sign in, manage keys, browse models and tasks, and update within native Settings → User or the OneYes menu. Local use is available without signing in. Cloud requests require network access and a usable key. No model weights are included or automatically downloaded. GPU inference is available by managing a normal ComfyUI GPU environment from source.
 
 Image receipts survive restarts. Re-run identical parameters with the same task seed, or use the recovery node with the local task ID from Settings. A missing submission receipt is never silently resubmitted. Automatic updates verify an independent Ed25519-signed manifest and package SHA-256. macOS builds are currently ad-hoc signed, without Apple notarization.
 

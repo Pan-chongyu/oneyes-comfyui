@@ -12,52 +12,57 @@ const { prepareInstall } = require('./update-install.cjs');
 app.setName('OneYes ComfyUI');
 if (!app.requestSingleInstanceLock()) app.quit();
 else {
-    let launcher, viewer, tray, runtime, vault, account, updater, quitting = false, stopped = false;
-    const settingsURL = pathToFileURL(path.join(__dirname, 'settings.html')).href;
-    const windows = new Set();
-    const send = () => { for (const window of windows) if (!window.isDestroyed()) window.webContents.send('oneyes:state', state()); };
+    let viewer, tray, runtime, vault, account, updater, pendingSection, canvasLoading, quitting = false, stopped = false;
+    const bootURL = pathToFileURL(path.join(__dirname, 'boot.html')).href;
+    const send = () => { if (viewer && !viewer.isDestroyed()) viewer.webContents.send('oneyes:state', state()); };
     const state = () => ({ runtime: runtime.state(), update: updater.state(), account: account.state(), version: app.getVersion(), platform: process.platform, arch: process.arch });
-    function windowOptions() { return { width: 1020, height: 740, minWidth: 740, minHeight: 620, backgroundColor: '#191b20', title: 'OneYes ComfyUI', icon: path.join(__dirname, 'resources/icon.png'), titleBarStyle: 'hidden', ...(process.platform !== 'darwin' ? { titleBarOverlay: { color: '#191b20', symbolColor: '#d2d6e2', height: 40 } } : { trafficLightPosition: { x: 16, y: 14 } }), webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } }; }
-    function secureWindow(window, allowed) {
-        windows.add(window);
-        window.on('closed', () => windows.delete(window));
-        window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-        window.webContents.on('will-navigate', (event, url) => { if (!allowed(url)) event.preventDefault(); });
-        window.on('close', event => { if (!quitting) { event.preventDefault(); window.hide(); } });
+    function canvasURL(url) {
+        try { const value = new URL(url); return value.origin === runtime.state().url && value.pathname === '/'; } catch { return false; }
     }
-    function settings() {
-        if (!launcher || launcher.isDestroyed()) {
-            launcher = new BrowserWindow(windowOptions());
-            secureWindow(launcher, url => url === settingsURL);
-            launcher.loadURL(settingsURL);
-        }
-        launcher.show(); launcher.focus();
+    async function settings(section = 'account') {
+        pendingSection = ['account', 'models', 'tasks', 'updates'].includes(section) ? section : 'account';
+        showWindow();
+        await launch();
+        if (canvasURL(viewer.webContents.getURL()) && !viewer.webContents.isLoadingMainFrame()) openPendingSettings();
     }
-    function showCanvas() {
+    function openPendingSettings() {
+        if (!pendingSection) return;
+        viewer.webContents.send('oneyes:open-settings', pendingSection);
+        pendingSection = undefined;
+    }
+    function showWindow() {
         if (!viewer || viewer.isDestroyed()) {
-            viewer = new BrowserWindow({ ...windowOptions(), width: 1440, height: 960, titleBarStyle: 'default', titleBarOverlay: false });
-            secureWindow(viewer, url => { try { return new URL(url).origin === runtime.state().url; } catch { return false; } });
-            viewer.loadURL(runtime.state().url);
+            viewer = new BrowserWindow({ width: 1440, height: 960, minWidth: 740, minHeight: 620, backgroundColor: '#18181a', title: 'OneYes ComfyUI', icon: path.join(__dirname, 'resources/icon.png'), webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true } });
+            viewer.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+            viewer.webContents.on('will-navigate', (event, url) => { if (url !== bootURL && !canvasURL(url)) event.preventDefault(); });
+            viewer.webContents.on('did-finish-load', () => { if (canvasURL(viewer.webContents.getURL())) openPendingSettings(); });
+            viewer.on('close', event => { if (!quitting) { event.preventDefault(); viewer.hide(); } });
+            void viewer.loadURL(bootURL);
         }
         viewer.show(); viewer.focus();
-        launcher?.hide();
     }
-    async function launch() { await runtime.launch(); if (runtime.state().status === 'ready') showCanvas(); }
-    async function openConfiguredCanvas() {
-        const configured = await vault.status();
-        if (configured.default || configured.image || configured.text) await launch();
+    async function launch() {
+        try {
+            await runtime.launch();
+            if (runtime.state().status === 'ready' && !canvasURL(viewer.webContents.getURL())) {
+                canvasLoading ||= viewer.loadURL(runtime.state().url).finally(() => { canvasLoading = undefined; });
+                await canvasLoading;
+            }
+        } catch {
+            if (viewer.webContents.getURL() !== bootURL) await viewer.loadURL(bootURL);
+        }
     }
     async function connect(operation, args) {
         const result = await account.call(operation, args);
         if (['restore', 'reuse', 'login', 'login-2fa'].includes(operation) && result.connected && !result.requires_2fa) return account.call('auto-configure', { account_id: result.user.id });
         return result;
     }
-    function authorize(event, onlySettings = false) {
+    function authorize(event, requiresCanvas = false) {
         const url = event.senderFrame?.url;
-        if (!windows.has(BrowserWindow.fromWebContents(event.sender)) || event.senderFrame !== event.sender.mainFrame || (url !== settingsURL && (onlySettings || !runtime.state().url || !url?.startsWith(runtime.state().url + '/')))) throw new Error('请求来源无效');
+        if (event.sender !== viewer?.webContents || event.senderFrame !== event.sender.mainFrame || (!canvasURL(url) && (requiresCanvas || url !== bootURL))) throw new Error('请求来源无效');
     }
-    function handle(name, action, onlySettings = false) {
-        ipcMain.handle('oneyes:' + name, async (event, ...args) => { authorize(event, onlySettings); return action(...args); });
+    function handle(name, action, requiresCanvas = false) {
+        ipcMain.handle('oneyes:' + name, async (event, ...args) => { authorize(event, requiresCanvas); return action(...args); });
     }
     async function localRequest(route) {
         if (runtime.state().status !== 'ready') throw new Error('请先启动 ComfyUI，再刷新模型或任务列表');
@@ -66,7 +71,7 @@ else {
         if (!response.ok) throw new Error(value.error || '暂时无法读取，请稍后重试');
         return value;
     }
-    app.on('second-instance', () => viewer && !viewer.isDestroyed() ? (viewer.show(), viewer.focus()) : settings());
+    app.on('second-instance', () => { if (runtime) showWindow(); });
     app.whenReady().then(async () => {
         app.setAppUserModelId('ai.oneyes.comfyui');
         const directory = app.getPath('userData');
@@ -81,30 +86,28 @@ else {
             app.quit();
         } });
         session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
-            if (runtime.state().url && details.url.startsWith(runtime.state().url + '/oneyes/') && [...windows].some(window => !window.isDestroyed() && window.webContents.id === details.webContentsId)) details.requestHeaders['X-OneYes-Session'] = runtime.token();
+            if (runtime.state().url && details.url.startsWith(runtime.state().url + '/oneyes/') && viewer?.webContents.id === details.webContentsId) details.requestHeaders['X-OneYes-Session'] = runtime.token();
             callback({ requestHeaders: details.requestHeaders });
         });
         session.defaultSession.setPermissionRequestHandler((contents, permission, callback, details) => callback(permission === 'fullscreen' && details.isMainFrame && contents.mainFrame.url.startsWith(runtime.state().url + '/')));
         session.defaultSession.setPermissionCheckHandler((contents, permission, _origin, details) => permission === 'fullscreen' && details.isMainFrame && Boolean(runtime.state().url) && contents?.mainFrame.url.startsWith(runtime.state().url + '/'));
         handle('state', async () => ({ ...state(), configured: await vault.status() }));
-        handle('settings', settings);
-        handle('save-keys', async changes => { await vault.save(changes); void openConfiguredCanvas().catch(settings); return vault.status(); }, true);
+        handle('settings', settings, true);
+        handle('save-keys', async changes => { await vault.save(changes); return vault.status(); }, true);
         handle('account', async (operation, args) => {
             try {
-                const result = await connect(operation, args);
-                if (operation === 'configure' || (['reuse', 'login', 'login-2fa'].includes(operation) && result.connected && !result.requires_2fa)) void openConfiguredCanvas().catch(settings);
-                return result;
+                return await connect(operation, args);
             }
             finally { send(); }
         }, true);
-        handle('launch', launch, true);
+        handle('launch', launch);
         handle('keys', () => shell.openExternal('https://oneyes.ai/keys'), true);
-        handle('data', () => shell.openPath(directory), true);
+        handle('data', () => shell.openPath(directory));
         handle('models', profile => { if (!['default', 'image', 'text'].includes(profile)) throw new Error('Key 类型无效'); return localRequest('models/' + profile); }, true);
         handle('tasks', () => localRequest('tasks'), true);
         handle('update-check', () => updater.check(), true);
         handle('update-install', () => updater.apply(), true);
-        const menu = [{ label: 'OneYes', submenu: [{ label: 'OneYes 设置', accelerator: 'CmdOrCtrl+,', click: settings }, { label: '打开画布', click: () => void launch().catch(settings) }, { label: '检查更新', click: () => { settings(); void updater.check(); } }, { type: 'separator' }, { label: '退出', accelerator: 'CmdOrCtrl+Q', click: () => { quitting = true; app.quit(); } }] }, { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' }];
+        const menu = [{ label: 'OneYes', submenu: [{ label: 'OneYes 账户与 Key', accelerator: 'CmdOrCtrl+,', click: () => void settings() }, { label: '打开画布', click: showWindow }, { label: '检查更新', click: () => { void settings('updates'); void updater.check(); } }, { type: 'separator' }, { label: '退出', accelerator: 'CmdOrCtrl+Q', click: () => { quitting = true; app.quit(); } }] }, { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' }];
         Menu.setApplicationMenu(Menu.buildFromTemplate(menu));
         let icon = nativeImage.createFromPath(path.join(__dirname, 'resources', process.platform === 'darwin' ? 'trayTemplate.png' : 'icon.png'));
         if (process.platform === 'darwin') icon.setTemplateImage(true);
@@ -112,15 +115,15 @@ else {
         tray = new Tray(icon);
         tray.setToolTip('OneYes ComfyUI');
         tray.setContextMenu(Menu.buildFromTemplate(menu[0].submenu));
-        tray.on('click', settings);
-        settings();
-        void runtime.launch().catch(settings);
-        void connect('restore').then(async () => { send(); await openConfiguredCanvas(); }).catch(settings);
+        tray.on('click', showWindow);
+        showWindow();
+        void launch();
+        void connect('restore').finally(send).catch(() => {});
         await fs.mkdir(path.join(directory, 'ota'), { recursive: true });
         await fs.writeFile(path.join(directory, 'ota', `installed-${app.getVersion()}.ok`), 'ready');
         void updater.start();
     });
-    app.on('activate', () => runtime && settings());
+    app.on('activate', () => { if (runtime) showWindow(); });
     app.on('window-all-closed', () => {});
     app.on('before-quit', event => {
         quitting = true;

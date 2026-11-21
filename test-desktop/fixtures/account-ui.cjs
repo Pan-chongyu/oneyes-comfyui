@@ -10,12 +10,11 @@ app.disableHardwareAcceleration();
 // Keep this test independent of an installed copy running under the same user.
 app.requestSingleInstanceLock = () => true;
 console.log('Starting isolated account UI test.');
-// Account UI runs without preparing the multi-gigabyte engine; the real runtime has its own smoke test.
-let startupCount = 0;
-require('../../desktop/runtime.cjs').createRuntime = ({ changed }) => {
-    const state = { status: 'starting', phase: '启动 ComfyUI', message: '正在加载内置运行环境', url: '' };
-    return { state: () => state, token: () => '', async launch() { startupCount++; changed(state); return state; }, async stop() {} };
-};
+const runtime = require('../../desktop/runtime.cjs'), createRuntime = runtime.createRuntime;
+runtime.createRuntime = options => createRuntime({ ...options, changed: state => {
+    options.changed(state);
+    if (state.status === 'error') { console.error('Engine startup failed:', state.message); app.quit(); }
+} });
 const service = require('../../desktop/account.cjs'), createAccount = service.createAccount;
 let shared = false, identity = 17, passed = false;
 const user = () => ({ id: identity, email: 'creator@example.test', username: '创作者', balance: 12.34 });
@@ -57,11 +56,24 @@ async function waitFor(window, expression) {
     throw new Error('UI did not reach: ' + expression);
 }
 app.on('browser-window-created', (_event, window) => {
-    window.webContents.once('did-finish-load', async () => {
-        if (!window.webContents.getURL().endsWith('/desktop/settings.html')) return;
-        const js = code => window.webContents.executeJavaScript(code);
+    window.webContents.on('render-process-gone', (_event, details) => { console.error('Renderer stopped:', details.reason); app.quit(); });
+    window.webContents.on('console-message', event => { if (event.level === 'error') console.error('Renderer:', event.message); });
+    window.webContents.on('did-finish-load', async () => {
+        if (!window.webContents.getURL().startsWith('http://127.0.0.1:') || window.accountTestStarted) return;
+        window.accountTestStarted = true;
+        const js = async code => {
+            try { return await window.webContents.executeJavaScript(code); }
+            catch (error) { throw new Error('UI step failed: ' + code, { cause: error }); }
+        };
         try {
-            await waitFor(window, `Boolean(document.querySelector('#login-form'))`);
+            await waitFor(window, `Boolean(document.querySelector('#graph-canvas') && window.comfyAPI?.app?.app?.graph)`);
+            assert.equal(BrowserWindow.getAllWindows().length, 1, 'Startup must open only the canvas window');
+            assert.equal(await js(`Boolean(document.querySelector('[data-testid="settings-dialog"]'))`), false, 'Startup must not require a settings screen');
+            assert.deepEqual((await js(`window.oneYesDesktop.state()`)).configured, { default: false, image: false, text: false });
+            await js(`import('/oneyes-native.js').then(m=>m.openSettings())`);
+            await waitFor(window, `Boolean(document.querySelector('[data-testid="settings-dialog"] #login-form'))`);
+            assert.equal(await js(`Boolean(document.querySelector('.oneyes-panel'))`), true);
+            assert.doesNotMatch(await js(`document.querySelector('[data-testid="settings-dialog"]').textContent`), /Comfy 账户|登录您的帐户/);
             assert.equal(await js(`document.querySelector('#account-entry').hidden`), false);
             assert.equal(await js(`document.querySelector('#manual-key-section').open`), false);
             await js(`document.querySelector('#login-email').value='creator@example.test';document.querySelector('#login-password').value='password-test-secret';document.querySelector('#login-form').requestSubmit(document.querySelector('#login-submit'))`);
@@ -76,7 +88,7 @@ app.on('browser-window-created', (_event, window) => {
             await waitFor(window, `document.querySelector('#message').textContent.includes('已配置') && !document.querySelector('#use-account-keys').disabled`);
             const state = await js(`window.oneYesDesktop.state()`);
             assert.deepEqual(state.configured, { default: true, image: true, text: true });
-            assert.ok(startupCount > 0, 'The engine must start on a fresh installation');
+            assert.equal(state.runtime.status, 'ready', 'The real engine must start before login');
             assert.doesNotMatch(JSON.stringify(state), /test-secret/);
             assert.doesNotMatch(await js(`document.body.textContent`), /test-secret/);
             if (process.env.COMFY_UI_SCREENSHOT) fs.writeFileSync(process.env.COMFY_UI_SCREENSHOT, (await window.webContents.capturePage()).toPNG());
@@ -91,12 +103,23 @@ app.on('browser-window-created', (_event, window) => {
             await waitFor(window, `!document.querySelector('#reconnect-account').hidden && !document.querySelector('#reconnect-account').disabled`);
             await js(`document.querySelector('#reconnect-account').click()`);
             await waitFor(window, `(async()=>{const state=await window.oneYesDesktop.state();return state.account.user.id===18&&state.account.connected})()`);
+            await js(`document.querySelector('#oneyes-tab-models').click()`);
+            assert.equal(await js(`document.querySelector('#models').hidden`), false);
+            await js(`window.oneYesDesktop.openSettings('updates')`);
+            await waitFor(window, `document.querySelector('#updates')?.hidden===false`);
+            assert.equal(BrowserWindow.getAllWindows().length, 1, 'Menus must reuse the native settings dialog');
+            window.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+            window.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+            await waitFor(window, `!document.querySelector('.oneyes-panel')`);
+            await js(`window.oneYesDesktop.openSettings('account')`);
+            await waitFor(window, `Boolean(document.querySelector('#account-summary')&&!document.querySelector('#account-summary').hidden)`);
+            assert.equal(await js(`document.querySelectorAll('.oneyes-panel').length`), 1);
             // Account IPC is restricted even when called from another main frame.
             const untrusted = new BrowserWindow({ show: false, webPreferences: { preload: path.resolve('desktop/preload.cjs'), sandbox: true, contextIsolation: true } });
             await untrusted.loadURL('about:blank');
             assert.match(await untrusted.webContents.executeJavaScript(`window.oneYesDesktop.account('reuse').then(()=>'',error=>error.message)`), /请求来源无效/);
             untrusted.destroy();
-            console.log('Native account UI: login + 2FA, group selection, encrypted keys, desktop reuse, identity change and IPC authorization passed.');
+            console.log('Native ComfyUI: direct canvas startup, integrated User settings, login + 2FA, group selection, encrypted keys, desktop reuse, identity change, menu navigation and IPC authorization passed.');
             passed = true;
         } catch (error) { console.error(error); }
         finally { app.quit(); }

@@ -39,7 +39,7 @@ NODE_CLASS_MAPPINGS = {}
 `);
 const runtime = createRuntime({ resources, directory, changed: state => console.log(JSON.stringify({ status: state.status, phase: state.phase, message: state.message })) });
 try {
-    for (const name of ['python', 'engine']) { await rename(path.join(originalResources, name), path.join(resources, name)); moved.push(name); }
+    for (const name of ['python', 'engine', 'frontend']) { await rename(path.join(originalResources, name), path.join(resources, name)); moved.push(name); }
     await runtime.launch();
     const origin = runtime.state().url;
     const page = await fetch(origin + '/');
@@ -49,6 +49,11 @@ try {
     const entry = new URL(script[1], origin);
     assert.equal(entry.origin, origin, 'Frontend must be loaded locally');
     assert.equal((await fetch(entry)).status, 200);
+    const frontend = await fetch(origin + '/oneyes-frontend.json').then(r => r.json());
+    assert.equal(frontend.nativeUserPanel, true);
+    assert.match(await fetch(origin + '/assets/' + frontend.userPanel).then(r => r.text()), /mountAccountPanel/);
+    assert.match(await fetch(origin + '/oneyes-native.js').then(r => r.text()), /useSettingsDialog/);
+    assert.equal((await fetch(origin + '/extensions/oneyes/account-panel.html')).status, 200);
     const nodes = await fetch(origin + '/object_info').then(r => r.json());
     for (const name of ['OneYesImage', 'OneYesImageEdit', 'OneYesRecoverImage', 'OneYesText', 'KSampler', 'SaveImage', 'LoadImage']) assert.ok(nodes[name], `Missing actual ComfyUI node ${name}`);
     const denied = await fetch(origin + '/oneyes/settings'); assert.equal(denied.status, 403);

@@ -61,7 +61,7 @@ function createRuntime({ resources, directory, changed = () => {} }) {
             await fs.cp(path.join(engine, 'oneyes/web'), path.join(extension, 'web'), { recursive: true, force: true });
             const port = await availablePort(), url = `http://127.0.0.1:${port}`;
             emit({ status: 'starting', phase: '启动 ComfyUI', message: '正在加载节点与画布', url });
-            const child = spawn(python, [path.join(engine, 'main.py'), '--listen', '127.0.0.1', '--port', String(port), '--cpu', '--disable-auto-launch', '--disable-partner-nodes', '--base-directory', data], { cwd: engine, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+            const child = spawn(python, [path.join(engine, 'main.py'), '--listen', '127.0.0.1', '--port', String(port), '--cpu', '--disable-auto-launch', '--disable-partner-nodes', '--front-end-root', path.join(resources, 'frontend'), '--base-directory', data], { cwd: engine, env, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
             processHandle = child;
             let ended = false, log = '';
             const capture = bytes => { log = (log + bytes.toString()).slice(-6000); };
