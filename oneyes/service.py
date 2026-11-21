@@ -19,6 +19,7 @@ from .storage import Vault, data_directory, write_json
 
 ORIGINS = ("https://oneyes.ai/v1", "https://api.oneyes.ai/v1")
 GEMINI_ORIGINS = tuple(origin.removesuffix("/v1") + "/v1beta" for origin in ORIGINS)
+FAKE_IP_NETWORK = ipaddress.ip_network("198.18.0.0/15")
 
 
 class OneYesError(RuntimeError):
@@ -47,8 +48,10 @@ class PublicResolver(aiohttp.abc.AbstractResolver):
         addresses = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
         values = []
         for family, _, proto, _, address in addresses:
-            if not ipaddress.ip_address(address[0]).is_global:
-                raise OneYesError("素材下载地址无效")
+            ip = ipaddress.ip_address(address[0])
+            # Proxy Fake-IP DNS uses this range; HTTPS still verifies the original hostname.
+            if not ip.is_global and ip not in FAKE_IP_NETWORK:
+                raise OneYesError("素材域名解析到了内网地址，请检查代理或 DNS 后再次取回原任务")
             values.append({"hostname": host, "host": address[0], "port": port, "family": family, "proto": proto, "flags": 0})
         return values
 
@@ -134,7 +137,7 @@ class OneYesClient:
 
     async def download(self, url, target=None):
         url = public_url(url)
-        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(resolver=PublicResolver()), timeout=aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=60)) as session:
+        async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(resolver=PublicResolver()), timeout=aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=60), trust_env=True) as session:
             async with session.get(url, allow_redirects=False) as response:
                 if response.status != 200:
                     raise OneYesError("素材原件暂时无法下载，请再次取回原任务")

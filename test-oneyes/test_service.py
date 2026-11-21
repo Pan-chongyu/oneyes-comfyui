@@ -3,6 +3,7 @@ import base64
 from io import BytesIO
 import json
 from pathlib import Path
+import socket
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -10,7 +11,7 @@ from unittest.mock import patch
 import aiohttp
 from PIL import Image
 
-from oneyes.service import OneYesClient, OneYesError, ORIGINS, public_url
+from oneyes.service import OneYesClient, OneYesError, ORIGINS, PublicResolver, public_url
 from oneyes.storage import Vault, write_json
 
 
@@ -55,6 +56,47 @@ class ServiceTests(unittest.IsolatedAsyncioTestCase):
         images, _ = await reopened.recover(record["id"])
         self.assertEqual(len(images), 1)
         self.assertEqual([item[1] for item in self.calls], ["/images/tasks/remote-original"])
+
+    async def test_fake_ip_dns_keeps_hostname_for_https_and_blocks_internal_addresses(self):
+        resolver = PublicResolver()
+        for address in ["198.18.0.1", "198.19.255.254", "93.184.215.14"]:
+            with patch.object(asyncio.get_running_loop(), "getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (address, 443))]):
+                result = await resolver.resolve("images.example.com", 443)
+            self.assertEqual(result[0]["hostname"], "images.example.com")
+            self.assertEqual(result[0]["host"], address)
+        for address in ["127.0.0.1", "192.168.1.3", "10.0.0.2", "169.254.169.254", "::1", "fe80::1"]:
+            with patch.object(asyncio.get_running_loop(), "getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP, "", (address, 443))]):
+                with self.assertRaisesRegex(OneYesError, "内网地址"):
+                    await resolver.resolve("images.example.com", 443)
+        for url in ["https://198.18.0.1/x", "https://198.19.255.254/x"]:
+            with self.assertRaises(OneYesError):
+                public_url(url)
+
+    async def test_completed_url_result_can_be_retrieved_after_download_failure_without_resubmission(self):
+        async def reply(origin, path, key, payload=None, multipart=None):
+            if path.startswith("/images/tasks/"):
+                self.calls.append((origin, path, key, payload, multipart))
+                return {"id": "remote-original", "status": "completed", "result": {"data": [{"url": "https://images.example.com/original.png"}]}}, 1
+            return await self.reply(origin, path, key, payload, multipart)
+        async def failed_download(url):
+            raise OneYesError("素材下载地址无效")
+        self.client.request = reply
+        self.client.download = failed_download
+        with self.assertRaisesRegex(OneYesError, "素材下载地址无效"):
+            await self.client.image("example-image", "prompt", "auto", "auto", 14)
+        record = self.client.records()[0]
+        self.assertEqual(record["status"], "completed")
+        self.calls.clear()
+        reopened = OneYesClient(self.temp.name)
+        reopened.request = reply
+        async def download(url):
+            self.assertEqual(url, "https://images.example.com/original.png")
+            return self.png
+        reopened.download = download
+        images, job = await reopened.recover(record["id"])
+        self.assertEqual(images[0].size, (17, 23))
+        self.assertEqual(job, record["id"])
+        self.assertEqual(self.calls, [], "Completed results must not make another paid request or poll")
 
     async def test_lost_submission_does_not_repeat_paid_request(self):
         async def disconnected(origin, path, key, payload=None, multipart=None):

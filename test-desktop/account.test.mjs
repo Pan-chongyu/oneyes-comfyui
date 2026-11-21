@@ -35,11 +35,51 @@ async function fixture(t, overrides = {}) {
         if (pathname === '/keys/8') return json(key);
         throw new Error('Unexpected route: ' + pathname);
     };
-    const dependencies = { store, vault, fetcher, broker: overrides.broker || (async () => { throw new Error('No desktop'); }) };
+    const dependencies = { store, vault, fetcher, broker: overrides.broker || (async () => { throw new Error('No desktop'); }), websiteLogin: overrides.websiteLogin };
     const account = createAccount(dependencies);
     const login = () => account.call('login', { email: ' creator@example.test ', password: 'password-secret' });
     return { directory, account, login, requests, dependencies, vault, store };
 }
+
+test('fresh standalone restore does not contact the primary client', async t => {
+    let brokerCalls = 0;
+    const f = await fixture(t, { broker: async () => { brokerCalls++; throw new Error('Not installed'); } });
+    const state = await f.account.call('restore');
+    assert.equal(state.user, null);
+    assert.equal(state.error, '');
+    await f.vault.save({ default: 'manual-secret' });
+    await createAccount(f.dependencies).call('restore');
+    assert.equal((await f.vault.status()).default, true);
+    assert.equal(brokerCalls, 0);
+    assert.equal(f.requests.length, 0);
+});
+
+test('website login verifies identity server-side and restores independently', async t => {
+    let websiteCalls = 0;
+    const f = await fixture(t, { websiteLogin: async () => { websiteCalls++; return { access_token: 'website-access-secret', refresh_token: 'website-refresh-secret' }; } });
+    const state = await f.account.call('website-login', { access_token: 'untrusted-renderer-value', user: { id: 99 } });
+    assert.equal(state.user.id, user.id);
+    assert.equal(state.source, 'login');
+    assert.equal(state.connected, true);
+    assert.equal(websiteCalls, 1);
+    assert.equal(f.requests[0].pathname, '/auth/me');
+    assert.equal(f.requests[0].init.headers.Authorization, 'Bearer website-access-secret');
+    assert.doesNotMatch(JSON.stringify(state), /secret|token/);
+    await f.account.call('auto-configure', { account_id: user.id });
+    assert.equal((await createAccount(f.dependencies).call('restore')).connected, true);
+    assert.equal((await f.vault.status()).image, true);
+    assert.doesNotMatch(await readFile(path.join(f.directory, 'account.json'), 'utf8'), /website-refresh-secret/);
+});
+
+test('website cancellation or invalid tokens leave existing local keys intact', async t => {
+    const f = await fixture(t, { websiteLogin: async () => { throw new Error('已取消网站登录'); } });
+    await f.vault.save({ image: 'manual-key' });
+    await assert.rejects(f.account.call('website-login'), /已取消/);
+    const invalid = createAccount({ ...f.dependencies, websiteLogin: async () => ({ access_token: 'expired', refresh_token: 'invalid' }), fetcher: async () => json({}, 401) });
+    await assert.rejects(invalid.call('website-login'), /登录已过期/);
+    assert.equal((await f.vault.status()).image, true);
+    assert.equal(invalid.state().user, null);
+});
 
 test('direct login, safe catalog, selected keys and encrypted restart/refresh', async t => {
     const f = await fixture(t);
@@ -120,7 +160,7 @@ test('empty direct account creates one workflow key; desktop reuse stays read-on
         if (operation === 'keys') return { items: [], total: 0 };
         throw new Error('Reuse must not create keys');
     } });
-    await unavailable.account.call('restore');
+    await unavailable.account.call('reuse');
     const state = await unavailable.account.call('auto-configure', { account_id: user.id });
     assert.equal(state.connected, true);
     assert.match(state.error, /暂无可用/);
@@ -167,7 +207,7 @@ test('desktop reuse pins identity and never copies account tokens or creates Can
         if (operation === 'key') { assert.equal(args.id, key.id); return key; }
         throw new Error('Unexpected write');
     } });
-    assert.equal((await f.account.call('restore')).source, 'desktop');
+    assert.equal((await f.account.call('reuse')).source, 'desktop');
     assert.doesNotMatch(JSON.stringify(await f.store.read()), /token|must-not-leak/);
     await assert.rejects(f.account.call('configure', { account_id: 99, image_id: 8, text_id: 8 }), /账号已变更/);
     await f.account.call('configure', { account_id: user.id, image_id: 8, text_id: 8 });

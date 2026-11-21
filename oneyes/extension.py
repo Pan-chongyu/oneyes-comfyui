@@ -18,7 +18,7 @@ def output_images(images, task_id):
 
 def image_inputs():
     return [
-        io.String.Input("model", display_name="模型", default="gpt-image-1", tooltip="在节点的“选择 OneYes 模型”中选择当前 Key 可用的完整模型 ID"),
+        io.String.Input("model", display_name="模型", default="gpt-image-2", tooltip="在节点的“选择 OneYes 模型”中选择当前 Key 可用的完整模型 ID"),
         io.String.Input("prompt", display_name="提示词", multiline=True),
         io.String.Input("size", display_name="尺寸", default="auto", tooltip="原样传递，例如 auto、1024x1024；不会自动降低分辨率"),
         io.Combo.Input("quality", display_name="质量", options=["auto", "low", "medium", "high"], default="auto"),

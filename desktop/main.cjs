@@ -5,6 +5,7 @@ const { pathToFileURL } = require('node:url');
 const { createRuntime } = require('./runtime.cjs');
 const { createVault, createEncryptedStore } = require('./vault.cjs');
 const { createAccount } = require('./account.cjs');
+const { createWebsiteLogin } = require('./website-login.cjs');
 const { createUpdater } = require('./updater.cjs');
 const { updateTarget } = require('./update-platform.cjs');
 const { prepareInstall } = require('./update-install.cjs');
@@ -68,7 +69,7 @@ else {
     }
     async function connect(operation, args) {
         const result = await account.call(operation, args);
-        if (['restore', 'reuse', 'login', 'login-2fa'].includes(operation) && result.connected && !result.requires_2fa) return account.call('auto-configure', { account_id: result.user.id });
+        if (['restore', 'reuse', 'login', 'login-2fa', 'website-login'].includes(operation) && result.connected && !result.requires_2fa) return account.call('auto-configure', { account_id: result.user.id });
         return result;
     }
     function authorize(event, requiresCanvas = false) {
@@ -92,7 +93,7 @@ else {
         const resources = app.isPackaged ? process.resourcesPath : __dirname;
         runtime = createRuntime({ resources, directory, changed: send });
         vault = createVault(directory);
-        account = createAccount({ store: createEncryptedStore(directory, 'account.json'), vault, fetcher: (url, init) => net.fetch(url, init) });
+        account = createAccount({ store: createEncryptedStore(directory, 'account.json'), vault, fetcher: (url, init) => net.fetch(url, init), websiteLogin: createWebsiteLogin(() => viewer) });
         updater = createUpdater({ currentVersion: app.getVersion(), directory, target: () => updateTarget(), enabled: app.isPackaged, fetcher: (url, init) => net.fetch(url, init), changed: send, install: async plan => {
             const start = await prepareInstall(plan);
             await start();

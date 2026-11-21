@@ -12,7 +12,7 @@ function usable(key) {
 function safeKey(key) {
     return { id: key.id, name: String(key.name || ''), group_id: key.group_id, usable: usable(key), group: key.group ? { id: key.group.id, name: String(key.group.name || ''), platform: String(key.group.platform || '') } : null };
 }
-function createAccount({ store, vault, fetcher, broker = brokerCall }) {
+function createAccount({ store, vault, fetcher, broker = brokerCall, websiteLogin }) {
     let session, access, challenge, connected = false, error = '', queue = Promise.resolve();
     const view = () => ({ user: session?.user || null, source: session?.source, profiles: session?.profiles, connected, error, requires_2fa: Boolean(challenge) });
     async function raw(method, path, payload, token) {
@@ -112,18 +112,22 @@ function createAccount({ store, vault, fetcher, broker = brokerCall }) {
                     if (user.id !== session.user?.id) { await vault.clearAccount(); access = null; await save({ disabled: true }); throw new Error('登录账号已变化，请重新登录'); }
                     return await accept({ ...session, user }, access);
                 }
-                if (!session.disabled) { try { return await shared(); } catch { /* Standalone login is available. */ } }
                 return view();
             } catch (failure) { connected = false; error = failure.message; return view(); }
         }
         if (operation === 'reuse') return shared();
+        if (operation === 'website-login') {
+            const tokens = await websiteLogin();
+            const user = safeUser(await raw('GET', '/auth/me', undefined, tokens.access_token));
+            return accept({ source: 'login', user, refresh_token: tokens.refresh_token }, tokens.access_token);
+        }
         if (operation === 'login' || operation === 'login-2fa') {
             let payload;
             if (operation === 'login') {
                 challenge = null;
                 if (typeof args.email !== 'string' || typeof args.password !== 'string' || !args.email.trim() || !args.password) throw new Error('请输入邮箱和密码');
                 const settings = await raw('GET', '/settings/public');
-                if (settings.turnstile_enabled || settings.tencent_captcha_enabled || settings.aliyun_captcha_enabled || settings.login_agreement_enabled) throw new Error('登录需要官网验证，请在 OneYes 客户端完成登录后复用登录态');
+                if (settings.turnstile_enabled || settings.tencent_captcha_enabled || settings.aliyun_captcha_enabled || settings.login_agreement_enabled) throw new Error('登录需要官网验证，请点击“网站登录”在本软件完成验证，或手动填写 API Key');
                 payload = { email: args.email.trim(), password: args.password };
             } else {
                 if (!challenge || typeof args.code !== 'string' || !args.code.trim()) throw new Error('请输入二次验证码，或重新登录');

@@ -146,6 +146,7 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
         });
     });
     $('reuse-account').onclick = () => void runAccount(async () => { const account = await bridge.account('reuse'); render({ ...current, account }); message(account.error || '已复用登录态，自动配置可用 Key，可以开始创作。'); });
+    $('website-login').onclick = () => void runAccount(async () => { const account = await bridge.account('website-login'); render({ ...current, account }); message(account.error || '已独立登录并配置可用 Key，可以开始创作。'); });
     $('reconnect-account').onclick = $('reuse-account').onclick;
     $('logout-account').onclick = () => void runAccount(async () => {
         if (!window.confirm('退出本软件并清除从该账号导入的 Key？不会退出 OneYes 客户端。原图片任务取回仍需要原 Key。')) return;

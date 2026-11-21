@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, Menu, dialog } = require('electron');
+const { app, BrowserWindow, shell, Menu, dialog, session } = require('electron');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -12,16 +12,37 @@ app.requestSingleInstanceLock = () => true;
 const modelFixture = path.join(directory, 'comfy/custom_nodes/oneyes_test_models');
 fs.mkdirSync(modelFixture, { recursive: true });
 fs.writeFileSync(path.join(modelFixture, '__init__.py'), `
+import base64
+from io import BytesIO
+from PIL import Image
 from oneyes.routes import client
+buffer = BytesIO()
+Image.new('RGB', (17, 23), 'blue').save(buffer, 'PNG')
 async def request(origin, path, key, payload=None, multipart=None):
-    assert path == '/models' and payload is None and multipart is None
-    return {'data': [{'id':'gpt-6.2-sol'}, {'id':'gpt-image-2.5'}, {'id':'claude-opus-4-6'}]}, 1
+    if path == '/models':
+        assert payload is None and multipart is None
+        return {'data': [{'id':'gpt-6.2-sol'}, {'id':'gpt-image-2.5'}, {'id':'claude-opus-4-6'}]}, 1
+    assert key == 'sk-image-test-secret'
+    if path.endswith('/async'):
+        assert payload['model'] == 'gpt-image-2.5'
+        return {'task_id': 'standalone-original-task'}, 1
+    assert path == '/images/tasks/standalone-original-task'
+    return {'id': 'standalone-original-task', 'status': 'completed', 'result': {'data': [{'b64_json': base64.b64encode(buffer.getvalue()).decode()}]}}, 1
 client.request = request
 NODE_CLASS_MAPPINGS = {}
 `);
 console.log('Starting isolated account UI test.');
 const openedPages = [];
 shell.openExternal = async url => { openedPages.push(url); };
+const fromPartition = session.fromPartition.bind(session);
+session.fromPartition = (...args) => {
+    const isolated = fromPartition(...args);
+    if (args[0].startsWith('oneyes-login-')) isolated.protocol.handle('https', request => {
+        assert.equal(new URL(request.url).origin, 'https://oneyes.ai');
+        return new Response('<!doctype html><title>OneYes test login</title><button id="complete-login" onclick="localStorage.setItem(\'auth_token\',\'website-access-test-secret\');localStorage.setItem(\'refresh_token\',\'website-refresh-test-secret\')">登录</button>', { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
+    });
+    return isolated;
+};
 const runtime = require('../../desktop/runtime.cjs'), createRuntime = runtime.createRuntime;
 let engine, stopCalls = 0;
 runtime.createRuntime = options => {
@@ -48,6 +69,10 @@ service.createAccount = options => createAccount({ ...options,
         if (route === '/auth/login/2fa') {
             assert.deepEqual(JSON.parse(init.body), { temp_token: 'challenge-test-secret', totp_code: '123456' });
             return json({ access_token: 'access-test-secret', refresh_token: 'refresh-test-secret', user: user() });
+        }
+        if (route === '/auth/me') {
+            assert.equal(init.headers.Authorization, 'Bearer website-access-test-secret');
+            return json(user());
         }
         if (route === '/groups/available') return json(groups);
         if (route === '/keys') return json({ items: keys, total: keys.length });
@@ -127,8 +152,37 @@ app.on('browser-window-created', (_event, window) => {
             assert.equal(state.runtime.status, 'ready', 'The real engine must start before login');
             assert.doesNotMatch(JSON.stringify(state), /test-secret/);
             assert.doesNotMatch(await js(`document.body.textContent`), /test-secret/);
+            const standalone = await js(`(async()=>{
+                await window.oneYesDesktop.models('image');
+                const response=await fetch('/prompt',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:{
+                    '1':{class_type:'OpenAIGPTImageNodeV2',inputs:{prompt:'standalone test',model:'gpt-image-2.5','model.size':'auto','model.custom_width':1024,'model.custom_height':1024,'model.background':'opaque','model.quality':'low','model.complexity':'low',n:1,seed:7}},
+                    '2':{class_type:'SaveImage',inputs:{images:['1',0],filename_prefix:'standalone-gpt'}}
+                }})});return {status:response.status,body:await response.json()};
+            })()`);
+            assert.equal(standalone.status, 200, JSON.stringify(standalone.body));
+            await waitFor(window, `(async()=>{const history=await fetch('/history/${standalone.body.prompt_id}').then(r=>r.json());return history['${standalone.body.prompt_id}']?.status.completed})()`);
+            assert.equal(await js(`(async()=>{const history=await fetch('/history/${standalone.body.prompt_id}').then(r=>r.json());return history['${standalone.body.prompt_id}'].status.status_str})()`), 'success', 'GPT image node must execute without a primary client');
             if (process.env.COMFY_UI_SCREENSHOT) fs.writeFileSync(process.env.COMFY_UI_SCREENSHOT, (await window.webContents.capturePage()).toPNG());
             await js(`window.confirm=()=>true;document.querySelector('#logout-account').click()`);
+            await waitFor(window, `!document.querySelector('#account-entry').hidden && !document.querySelector('#reuse-account').disabled`);
+            await js(`document.querySelector('#website-login').click()`);
+            await waitFor(window, `document.querySelector('#website-login').disabled`);
+            let loginWindow;
+            const loginDeadline = Date.now() + 15000;
+            while (!(loginWindow = BrowserWindow.getAllWindows().find(item => item !== window && item.webContents.getURL() === 'https://oneyes.ai/login'))) {
+                if (Date.now() > loginDeadline) throw new Error('Website login window did not open');
+                await new Promise(resolve => setTimeout(resolve, 40));
+            }
+            await waitFor(loginWindow, `Boolean(document.querySelector('#complete-login'))`);
+            assert.equal(loginWindow.webContents.getLastWebPreferences().sandbox, true);
+            assert.equal(loginWindow.webContents.getLastWebPreferences().nodeIntegration, false);
+            assert.equal(await loginWindow.webContents.executeJavaScript(`typeof window.oneYesDesktop`), 'undefined', 'Website login must not have the canvas bridge');
+            await loginWindow.webContents.executeJavaScript(`document.querySelector('#complete-login').click()`);
+            await waitFor(window, `!document.querySelector('#account-summary').hidden && !document.querySelector('#logout-account').disabled`);
+            assert.equal(loginWindow.isDestroyed(), true);
+            assert.equal((await js(`window.oneYesDesktop.state()`)).account.source, 'login');
+            assert.doesNotMatch(JSON.stringify(await js(`window.oneYesDesktop.state()`)), /website-access-test-secret|website-refresh-test-secret/);
+            await js(`document.querySelector('#logout-account').click()`);
             await waitFor(window, `!document.querySelector('#account-entry').hidden && !document.querySelector('#reuse-account').disabled`);
             shared = true;
             await js(`document.querySelector('#reuse-account').click()`);
@@ -197,7 +251,7 @@ app.on('browser-window-created', (_event, window) => {
             assert.match(await untrusted.webContents.executeJavaScript(`window.oneYesDesktop.account('reuse').then(()=>'',error=>error.message)`), /请求来源无效/);
             untrusted.destroy();
             assert.deepEqual(rendererErrors, [], 'Native OneYes integration must load without renderer errors');
-            console.log('Native ComfyUI: direct canvas startup, integrated User settings, login + 2FA, group selection, encrypted keys, desktop reuse, identity change, menu navigation and IPC authorization passed.');
+            console.log('Native ComfyUI: standalone GPT workflow, direct login + 2FA, isolated website login, encrypted keys, optional desktop reuse, identity change, native settings and IPC authorization passed.');
             window.close();
             assert.equal(window.isDestroyed(), false, 'The window close button must keep the app running in the tray');
             assert.equal(window.isVisible(), false);
