@@ -74,15 +74,26 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
         $('login-submit').textContent = accountBusy ? '正在连接…' : twoFactor ? '验证并登录' : '登录 OneYes';
         $('account-panel').setAttribute('aria-busy', String(accountBusy));
         for (const button of $('account-panel').querySelectorAll('button')) button.disabled = accountBusy;
-        $('use-account-keys').disabled = accountBusy || !account?.connected || !$('account-image').value || !$('account-text').value;
+        const selected = Boolean($('account-image').value && $('account-text').value);
+        const changed = profiles.slice(1).some(role => Number($('account-' + role).value) !== Number(account?.profiles?.[role] || 0));
+        $('use-account-keys').disabled = accountBusy || !account?.connected || !selected;
+        $('use-account-keys').textContent = accountBusy ? '正在处理…' : selected && !changed ? '重新应用 Key' : '应用所选 Key';
+        $('key-selection-state').textContent = accountBusy ? '正在同步配置…' : !account?.connected ? '等待连接' : !selected ? '请选择可用 Key' : changed ? '有更改，应用后生效' : '选择已保存';
+        $('key-selection-state').dataset.state = !accountBusy && account?.connected && selected && !changed ? 'saved' : 'pending';
+        for (const select of $('account-keys').querySelectorAll('select')) {
+            select.disabled = accountBusy || !account?.connected;
+            select.title = select.selectedOptions[0]?.textContent || '';
+        }
+        $('refresh-account').classList.toggle('busy', accountBusy);
         $('create-account-key').disabled = accountBusy || !account?.connected || !$('new-key-group').value;
-        $('account-status').textContent = account?.error || (user ? account.connected ? '已连接，Key 只保存在本机，不进入工作流。' : '暂未连接，已保存的 Key 仍可用于原工作流；可刷新重试。' : '可独立登录，也可复用本机 OneYes 客户端账号。');
+        $('account-status').textContent = account?.error || (user && !account.connected ? '暂未连接，已保存的 Key 仍可用于原工作流。请刷新重试。' : '');
+        $('account-status').hidden = !$('account-status').textContent;
+        $('account-source').dataset.connected = String(Boolean(account?.connected));
         if (!user) { catalogFor = ''; $('account-image').replaceChildren(); $('account-text').replaceChildren(); return; }
         $('account-name').textContent = user.username || user.email || 'OneYes 用户';
-        $('account-avatar').textContent = (user.username || user.email || 'O').slice(0, 1).toUpperCase();
         $('account-email').textContent = user.email;
         $('account-source').textContent = account.source === 'desktop' ? '已复用客户端登录' : 'OneYes 账号登录';
-        $('account-balance').textContent = '余额 $' + Number(user.balance || 0).toLocaleString('zh-CN', { maximumFractionDigits: 4 });
+        $('account-balance').textContent = '$' + Number(user.balance || 0).toLocaleString('zh-CN', { maximumFractionDigits: 4 });
         $('reconnect-account').hidden = account.source !== 'desktop' || account.connected;
         $('create-key-section').hidden = account.source !== 'login';
         const identity = `${user.id}:${account.source}`;
@@ -130,7 +141,8 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
         }
         $('new-key-group').replaceChildren(new Option('请选择分组', ''));
         for (const group of data.groups) $('new-key-group').add(new Option(`${group.platform} / ${group.name}`, String(group.id)));
-        $('account-key-hint').textContent = !available.length ? current.account.source === 'desktop' ? '还没有可用 Key。请在 OneYes 客户端新建后刷新，或退出后直接登录本软件创建。' : '还没有可用 Key。可在下方为所需分组新建，再点击使用。' : '请选择对应分组的 Key；相同 Key 也可以同时用于图片和文字。';
+        $('account-key-hint').textContent = !available.length ? current.account.source === 'desktop' ? '还没有可用 Key。请在 OneYes 客户端新建后刷新，或退出后直接登录本软件创建。' : '还没有可用 Key。可在下方为所需分组新建，再应用所选 Key。' : '';
+        $('account-key-hint').hidden = Boolean(available.length);
         renderAccount(current.account);
     }
     $('login-form').addEventListener('submit', event => {
@@ -163,7 +175,7 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
     });
     $('create-account-key').onclick = () => void runAccount(async () => {
         const key = await bridge.account('create-key', { account_id: current.account.user.id, group_id: Number($('new-key-group').value) });
-        await loadCatalog(key.id); message('Key 已准备好，请确认用途并点击“使用所选 Key”。');
+        await loadCatalog(key.id); message('Key 已准备好，请确认用途并点击“应用所选 Key”。');
     });
     for (const id of ['account-image', 'account-text', 'account-claude', 'account-gemini', 'account-grok', 'account-video', 'new-key-group']) $(id).onchange = () => renderAccount(current.account);
     $('key-form').addEventListener('submit', async event => {
