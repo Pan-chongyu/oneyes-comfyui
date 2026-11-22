@@ -12,6 +12,10 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
     const $ = id => root.querySelector('#' + id);
     const profiles = ['default', 'image', 'text', 'claude', 'gemini', 'grok', 'video'];
     let current, modelValues = [], accountBusy = false, catalogFor = '', twoFactor = false;
+    let avatarIdentity = '';
+    const avatar = $('account-avatar'), avatarFallback = $('account-avatar-fallback');
+    avatar.onload = () => { avatar.hidden = false; avatarFallback.style.display = 'none'; };
+    avatar.onerror = () => { avatar.hidden = true; avatarFallback.style.display = ''; };
     const message = value => { if ($('message')) $('message').textContent = value; };
     const action = (id, callback) => {
         const button = $(id);
@@ -63,6 +67,13 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
     function renderAccount(account) {
         if (!root.isConnected) return;
         const user = account?.user;
+        const identity = `${user?.id || ''}:${user?.avatar_url || ''}`;
+        if (avatarIdentity !== identity) {
+            avatarIdentity = identity;
+            avatar.hidden = true; avatarFallback.style.display = '';
+            if (user?.avatar_url) avatar.src = user.avatar_url;
+            else avatar.removeAttribute('src');
+        }
         $('account-entry').hidden = Boolean(user);
         $('account-summary').hidden = !user;
         twoFactor = Boolean(account?.requires_2fa);
@@ -96,8 +107,8 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
         $('account-balance').textContent = '$' + Number(user.balance || 0).toLocaleString('zh-CN', { maximumFractionDigits: 4 });
         $('reconnect-account').hidden = account.source !== 'desktop' || account.connected;
         $('create-key-section').hidden = account.source !== 'login';
-        const identity = `${user.id}:${account.source}`;
-        if (!accountBusy && account.connected && catalogFor !== identity) { catalogFor = identity; void loadCatalog().catch(error => message(error.message)); }
+        const catalogIdentity = `${user.id}:${account.source}`;
+        if (!accountBusy && account.connected && catalogFor !== catalogIdentity) { catalogFor = catalogIdentity; void loadCatalog().catch(error => message(error.message)); }
     }
     async function runAccount(callback) {
         if (accountBusy) return;

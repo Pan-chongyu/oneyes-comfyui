@@ -2,9 +2,19 @@ const { brokerCall } = require('./account-broker.cjs');
 
 const bases = ['https://oneyes.ai/api/v1', 'https://api.oneyes.ai/api/v1'];
 const KEY_NAME = 'ComfyUI_工作流';
+function safeAvatar(value) {
+    if (typeof value !== 'string') return '';
+    value = value.trim();
+    if (/^data:image\/(?:jpeg|png|webp|gif|avif);base64,[a-z0-9+/]+={0,2}$/i.test(value)) return value;
+    if (!/^https:\/\//i.test(value) && !/^\/(?!\/)/.test(value)) return '';
+    try {
+        const url = new URL(value, 'https://oneyes.ai');
+        return url.protocol === 'https:' && !url.username && !url.password ? url.href : '';
+    } catch { return ''; }
+}
 function safeUser(value) {
     if (!Number.isSafeInteger(value?.id) || value.id <= 0) throw new Error('OneYes 账户资料无效');
-    return { id: value.id, email: String(value.email || ''), username: String(value.username || ''), balance: Number(value.balance) || 0 };
+    return { id: value.id, email: String(value.email || ''), username: String(value.username || ''), balance: Number(value.balance) || 0, avatar_url: safeAvatar(value.avatar_url) };
 }
 function usable(key) {
     return key?.status === 'active' && !(key.expires_at && Date.parse(key.expires_at) <= Date.now()) && !(Number(key.quota) > 0 && Number(key.quota_used) >= Number(key.quota));

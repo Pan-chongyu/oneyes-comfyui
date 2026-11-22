@@ -11,7 +11,8 @@ const require = createRequire(import.meta.url);
 const { createAccount } = require('../desktop/account.cjs');
 const { brokerCall } = require('../desktop/account-broker.cjs');
 const { createVault, createEncryptedStore } = require('../desktop/vault.cjs');
-const user = { id: 17, email: 'creator@example.test', username: '创作者', balance: 12.3, access_token: 'must-not-leak' };
+const avatar = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a9xkAAAAASUVORK5CYII=';
+const user = { id: 17, email: 'creator@example.test', username: '创作者', balance: 12.3, avatar_url: avatar, access_token: 'must-not-leak' };
 const group = { id: 5, name: 'SVIP', platform: 'OpenAI', internal: 'private' };
 const key = { id: 8, name: 'ComfyUI_工作流', key: 'sk-never-render-this', status: 'active', group_id: 5, group };
 const json = (data, status = 200) => new Response(JSON.stringify({ code: status === 200 ? 0 : status, data }), { status });
@@ -59,6 +60,7 @@ test('website login verifies identity server-side and restores independently', a
     const f = await fixture(t, { websiteLogin: async () => { websiteCalls++; return { access_token: 'website-access-secret', refresh_token: 'website-refresh-secret' }; } });
     const state = await f.account.call('website-login', { access_token: 'untrusted-renderer-value', user: { id: 99 } });
     assert.equal(state.user.id, user.id);
+    assert.equal(state.user.avatar_url, avatar);
     assert.equal(state.source, 'login');
     assert.equal(state.connected, true);
     assert.equal(websiteCalls, 1);
@@ -85,6 +87,7 @@ test('direct login, safe catalog, selected keys and encrypted restart/refresh', 
     const f = await fixture(t);
     const view = await f.login();
     assert.equal(view.user.username, '创作者');
+    assert.equal(view.user.avatar_url, avatar);
     assert.equal(view.connected, true);
     assert.doesNotMatch(JSON.stringify(view), /secret|must-not-leak/);
     const catalog = await f.account.call('catalog', { account_id: user.id });
@@ -94,9 +97,11 @@ test('direct login, safe catalog, selected keys and encrypted restart/refresh', 
     assert.deepEqual(await f.vault.status(), { default: true, image: true, text: true, claude: false, gemini: false, grok: false, video: false });
     assert.equal(f.requests.filter(r => r.pathname === '/keys/8').length, 1);
     for (const file of ['account.json', 'vault.json']) assert.doesNotMatch(await readFile(path.join(f.directory, file), 'utf8'), /secret|creator@example|sk-never/);
+    assert.ok(!(await readFile(path.join(f.directory, 'account.json'), 'utf8')).includes(avatar), 'Avatar data must be encrypted with the cached identity');
     assert.doesNotMatch(JSON.stringify(await f.store.read()), /password-secret|access-secret/);
     const restored = createAccount(f.dependencies);
     assert.equal((await restored.call('restore')).connected, true);
+    assert.equal(restored.state().user.avatar_url, avatar);
     assert.equal((await f.store.read()).refresh_token, 'rotated-refresh-1');
     assert.deepEqual(await f.vault.status(), { default: true, image: true, text: true, claude: false, gemini: false, grok: false, video: false });
     assert.ok(f.requests.every(r => r.url.startsWith('https://oneyes.ai/api/v1/')));
@@ -104,6 +109,23 @@ test('direct login, safe catalog, selected keys and encrypted restart/refresh', 
     await restored.call('logout');
     assert.deepEqual(await f.vault.status(), { default: false, image: false, text: true, claude: false, gemini: false, grok: false, video: false });
     assert.equal((await createAccount(f.dependencies).call('restore')).user, null);
+});
+
+test('avatars refresh, clear and reject non-image or local executable sources', async t => {
+    let avatar_url = avatar;
+    const f = await fixture(t, { broker: async () => ({ ...user, avatar_url }) });
+    assert.equal((await f.account.call('reuse')).user.avatar_url, avatar);
+    for (const [input, expected] of [
+        ['https://cdn.example.test/avatar.png', 'https://cdn.example.test/avatar.png'],
+        ['/uploads/avatar.png', 'https://oneyes.ai/uploads/avatar.png'],
+        ['', ''], [null, ''], ['file:///tmp/avatar.png', ''], ['javascript:alert(1)', ''],
+        ['data:image/svg+xml;base64,PHN2Zy8+', ''], ['https://name:password@example.test/avatar.png', ''],
+    ]) {
+        avatar_url = input;
+        const state = await f.account.call('restore');
+        assert.equal(state.user.avatar_url, expected);
+        assert.equal((await f.store.read()).user.avatar_url, expected);
+    }
 });
 
 test('two-factor challenge stays in main process and can complete login', async t => {
@@ -231,6 +253,7 @@ test('offline restore keeps cached identity and existing keys for original workf
     const state = await offline.call('restore');
     assert.equal(state.user.id, user.id);
     assert.equal(state.connected, false);
+    assert.equal(state.user.avatar_url, avatar, 'Offline restart must keep the last account avatar');
     assert.deepEqual(await f.vault.status(), { default: true, image: true, text: true, claude: false, gemini: false, grok: false, video: false });
     const expired = createAccount({ ...f.dependencies, fetcher: async () => json({}, 401) });
     assert.equal((await expired.call('restore')).user, null);
