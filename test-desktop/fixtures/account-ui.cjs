@@ -149,6 +149,7 @@ app.on('browser-window-created', (_event, window) => {
             assert.match(await js(`document.querySelector('[data-testid="oneyes-account-button"]').title`), /OneYes · 创作者 · 余额 \$12.34/);
             const avatarReady = `(()=>{const panel=document.querySelector('#account-avatar'),button=document.querySelector('.oneyes-account-avatar img');return panel&&!panel.hidden&&panel.naturalWidth>0&&button?.dataset.loaded==='true'&&button.naturalWidth>0})()`;
             await waitFor(window, avatarReady);
+            assert.equal(await js(`getComputedStyle(document.querySelector('.oneyes-account-avatar>i')).visibility`), 'hidden', 'Transparent avatars must not show the fallback glyph underneath');
             assert.deepEqual(await js(`['#account-avatar','.oneyes-account-avatar img'].map(selector=>{const image=document.querySelector(selector);return {fit:getComputedStyle(image).objectFit,round:getComputedStyle(image.parentElement).borderRadius}})`), [{ fit: 'cover', round: '50%' }, { fit: 'cover', round: '50%' }], 'Both account surfaces must crop rectangular avatars consistently');
             assert.deepEqual((await js(`window.oneYesDesktop.state()`)).configured, { default: true, image: true, text: true, claude: false, gemini: false, grok: false, video: false }, 'Login must configure usable keys before manual confirmation');
             assert.equal(await js(`document.querySelector('#use-account-keys').textContent`), '重新应用 Key', 'Saved selections should remain available after a manual Key override');
@@ -215,6 +216,7 @@ app.on('browser-window-created', (_event, window) => {
             avatar = 'data:image/png;base64,AAAA';
             await js(`document.querySelector('#refresh-account').click()`);
             await waitFor(window, `document.querySelector('#account-avatar').hidden && getComputedStyle(document.querySelector('#account-avatar-fallback')).display!=='none' && !document.querySelector('.oneyes-account-avatar img') && !document.querySelector('#refresh-account').disabled`);
+            assert.equal(await js(`getComputedStyle(document.querySelector('.oneyes-account-avatar>i')).visibility`), 'visible', 'A failed avatar must restore the fallback glyph');
             avatar = avatars[1];
             await js(`document.querySelector('#refresh-account').click()`);
             await waitFor(window, avatarReady);
