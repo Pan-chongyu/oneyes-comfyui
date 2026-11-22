@@ -179,7 +179,6 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
     });
     action('clear-keys', async () => { if (window.confirm('清除本机已保存的全部 OneYes Key？原任务取回需要重新填写原 Key。')) { configured(await bridge.saveKeys(Object.fromEntries(profiles.map(name => [name, ''])))); message('已清除本机 Key'); } });
     $('toggle-key').onclick = () => { const hidden = $('default-key').type === 'password'; $('default-key').type = hidden ? 'text' : 'password'; $('toggle-key').textContent = hidden ? '隐藏' : '显示'; };
-    action('open-keys', () => bridge.openKeys());
     action('register-account', () => bridge.openAccountPage('register'));
     action('forgot-password', () => bridge.openAccountPage('forgot-password'));
     action('open-data', () => bridge.openData());
