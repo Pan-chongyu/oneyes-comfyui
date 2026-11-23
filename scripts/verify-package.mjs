@@ -33,7 +33,6 @@ assert.match(await readFile(path.join(resources, 'frontend/assets', frontend.aut
 await access(path.join(resources, 'frontend/oneyes-account-button.js'));
 assert.match(await readFile(path.join(resources, 'frontend/assets', frontend.userPanel), 'utf8'), /mountAccountPanel/);
 assert.match(await readFile(path.join(resources, 'frontend/assets', frontend.aboutPanel), 'utf8'), /mountAboutPanel/);
-await access(path.join(resources, 'frontend/assets/oneyes-original-about.js'));
 await access(path.join(resources, 'engine/oneyes/web/account-panel.html'));
 await access(path.join(resources, 'engine/oneyes/web/about-panel.html'));
 await access(path.join(resources, 'engine/oneyes/web/about-panel.js'));

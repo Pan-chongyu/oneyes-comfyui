@@ -255,7 +255,7 @@ app.on('browser-window-created', (_event, window) => {
             assert.equal(await js(`Boolean(document.querySelector('.oneyes-user-settings'))`), false, 'Update shortcuts must select About even when User settings is already open');
             assert.equal(BrowserWindow.getAllWindows().length, 1, 'Menus must reuse the native settings dialog');
             assert.match(await js(`document.querySelector('#update-version').textContent`), new RegExp(app.getVersion()));
-            assert.equal(await js(`document.querySelector('.oneyes-component-info').open`), false, 'Keep the original component and system information folded');
+            assert.equal(await js(`Boolean(document.querySelector('.oneyes-about-settings details, .oneyes-about-settings footer, #macos-signing, #about-open-data'))`), false, 'About must show only product version and software updates');
             await js(`document.querySelector('#check-update').click()`);
             await waitFor(window, `document.querySelector('#update-label').textContent==='正在检查更新…' && document.querySelector('#check-update').disabled`);
             assert.equal(checkCalls, 1);

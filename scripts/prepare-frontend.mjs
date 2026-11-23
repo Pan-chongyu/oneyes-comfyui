@@ -41,15 +41,10 @@ export default {
     },
     beforeUnmount() { this.disposeOneYes?.(); }
 };\n`);
-await cp(path.join(assets, about[0]), path.join(assets, 'oneyes-original-about.js'));
 await writeFile(path.join(assets, about[0]), `import {${h} as h} from './${vue}';
-import OriginalAbout from './oneyes-original-about.js';
 export default {
     name: 'OneYesAboutPanel',
-    render() { return h('div', { class: 'oneyes-about-settings' }, [
-        h('div', { ref: 'host' }),
-        h('details', { class: 'oneyes-component-info' }, [h('summary', '组件与系统信息'), h(OriginalAbout)]),
-    ]); },
+    render() { return h('div', { ref: 'host', class: 'oneyes-about-settings' }); },
     async mounted() {
         const host = this.$refs.host;
         try {

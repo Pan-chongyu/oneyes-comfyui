@@ -15,7 +15,6 @@ export async function mountAboutPanel(root, bridge = window.oneYesDesktop) {
         current = state;
         const update = state.update;
         $('update-version').textContent = `版本 v${state.version} · ${state.arch}`;
-        $('macos-signing').hidden = state.platform !== 'darwin';
         $('update-label').textContent = ({ idle: '尚未检查更新', checking: '正在检查更新…', downloading: `正在下载 v${update.version} · ${Math.round(update.progress)}%`, ready: `v${update.version} 已准备好`, current: '当前已是最新版本', error: '更新未完成', installing: '正在安装并重新打开…' })[update.status] || update.status;
         $('update-detail').textContent = update.error || update.notes || '更新包经过签名和完整性校验。';
         $('update-progress').hidden = !['downloading', 'installing'].includes(update.status);
@@ -37,7 +36,6 @@ export async function mountAboutPanel(root, bridge = window.oneYesDesktop) {
     }
     $('check-update').onclick = () => action(async () => { await bridge.checkUpdate(); render(await bridge.state()); });
     $('install-update').onclick = () => action(() => bridge.installUpdate());
-    $('about-open-data').onclick = () => action(() => bridge.openData());
     const unsubscribe = bridge.onState(render);
     await bridge.state().then(render).catch(error => { if (root.isConnected) $('update-message').textContent = error.message; });
     return () => { unsubscribe(); root.replaceChildren(); };
