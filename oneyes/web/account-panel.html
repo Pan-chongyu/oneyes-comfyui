@@ -3,7 +3,6 @@
 <button id="oneyes-tab-account" data-tab="account" role="tab" aria-controls="account">账户与 Key</button>
 <button id="oneyes-tab-models" data-tab="models" role="tab" aria-controls="models">可用模型</button>
 <button id="oneyes-tab-tasks" data-tab="tasks" role="tab" aria-controls="tasks">云端任务</button>
-<button id="oneyes-tab-updates" data-tab="updates" role="tab" aria-controls="updates">软件更新</button>
 </nav>
 <section id="account" class="page" role="tabpanel">
 <div id="account-panel" class="account-panel" aria-busy="false">
@@ -33,5 +32,4 @@
 </section>
 <section id="models" class="page" role="tabpanel" hidden><div class="page-heading"><div><h2>可用模型</h2><p>读取当前 Key 的模型权限，显示完整模型名称。</p></div><button id="refresh-models" class="primary">刷新列表</button></div><div class="filters"><label for="model-profile">使用 Key</label><select id="model-profile"><option value="image">图片 Key</option><option value="text">文字 Key</option><option value="default">默认 Key</option><option value="claude">Claude Key</option><option value="gemini">Gemini Key</option><option value="grok">Grok 图片 Key</option><option value="video">Grok 视频 Key</option></select><input type="search" id="model-search" placeholder="搜索模型名称"></div><p class="hint">不同模型支持的接口可能不同。节点内点击“选择 OneYes 模型”即可直接选用；此处点击复制模型 ID。</p><div id="model-list" class="model-list"><p>启动画布后刷新模型列表。</p></div></section>
 <section id="tasks" class="page" role="tabpanel" hidden><div class="page-heading"><div><h2>云端任务</h2><p>保留原回执，重启或断网后继续取回。</p></div><button id="refresh-tasks" class="primary">刷新任务</button></div><p class="hint">点击复制本地任务编号，粘贴到“取回原图片任务”节点。图片任务只查询原任务，不重新生成；视频保持参数和种子不变，重新运行原 Grok 视频节点取回。保持原 Key 可继续取回。</p><div id="task-list" class="task-list"><p>点击刷新查看本机任务。</p></div></section>
-<section id="updates" class="page" role="tabpanel" hidden><div class="page-heading"><div><h2>软件更新</h2><p>更新后自动重新打开，保留 Key、工作流和云端任务。</p></div></div><div class="update-surface"><img src="/extensions/oneyes/icon.png" alt="ComfyUI"><h2>OneYes ComfyUI</h2><p id="update-version"></p><strong id="update-label">准备检查更新</strong><progress id="update-progress" max="100" value="0" hidden aria-label="更新下载进度"></progress><p id="update-detail" class="hint">更新清单采用独立 Ed25519 签名，下载后校验 SHA-256。</p><button id="check-update" class="primary">检查更新</button><button id="install-update" class="primary" hidden>更新并重新打开</button></div><p class="hint">macOS 当前采用 ad-hoc 自签名，尚未经过 Apple 公证。</p></section>
 <div id="message" role="status" aria-live="polite"></div><footer class="oneyes-footer"><span id="version"></span><button id="open-data" class="quiet">打开数据目录</button></footer></div>

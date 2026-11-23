@@ -15,16 +15,18 @@ await mkdir(destination, { recursive: true });
 await cp(source, destination, { recursive: true, filter: file => !file.endsWith('.map') });
 const assets = path.join(destination, 'assets'), files = await readdir(assets);
 const user = files.filter(file => /^UserPanel-[^.]+\.js$/.test(file));
+const about = files.filter(file => /^AboutPanel-[^.]+\.js$/.test(file));
 const vue = files.find(file => /^vendor-vue-core-[^.]+\.js$/.test(file));
 const dialog = files.find(file => /^dialogService-[^.]+\.js$/.test(file));
 const graph = files.find(file => /^GraphView-[^.]+\.js$/.test(file));
 const auth = files.filter(file => /^useAuthDialogs-[^.]+\.js$/.test(file));
 assert.equal(user.length, 1, 'Pinned frontend user panel has changed; review the integration before publishing');
+assert.equal(about.length, 1, 'Pinned frontend about panel has changed; review the update integration before publishing');
 assert.ok(vue && dialog && graph);
 assert.equal(auth.length, 1, 'Pinned frontend authentication module has changed');
 const vueSource = await readFile(path.join(assets, vue), 'utf8'), dialogSource = await readFile(path.join(assets, dialog), 'utf8');
-const h = vueSource.match(/\bh as (\w+)/)?.[1], settings = dialogSource.match(/\buseSettingsDialog as (\w+)/)?.[1];
-assert.ok(h && settings, 'Pinned frontend exports have changed');
+const h = vueSource.match(/\bh as (\w+)/)?.[1], nextTick = vueSource.match(/\bnextTick as (\w+)/)?.[1], settings = dialogSource.match(/\buseSettingsDialog as (\w+)/)?.[1];
+assert.ok(h && nextTick && settings, 'Pinned frontend exports have changed');
 await writeFile(path.join(assets, user[0]), `import {${h} as h} from './${vue}';
 export default {
     name: 'OneYesUserPanel',
@@ -39,12 +41,38 @@ export default {
     },
     beforeUnmount() { this.disposeOneYes?.(); }
 };\n`);
+await cp(path.join(assets, about[0]), path.join(assets, 'oneyes-original-about.js'));
+await writeFile(path.join(assets, about[0]), `import {${h} as h} from './${vue}';
+import OriginalAbout from './oneyes-original-about.js';
+export default {
+    name: 'OneYesAboutPanel',
+    render() { return h('div', { class: 'oneyes-about-settings' }, [
+        h('div', { ref: 'host' }),
+        h('details', { class: 'oneyes-component-info' }, [h('summary', '组件与系统信息'), h(OriginalAbout)]),
+    ]); },
+    async mounted() {
+        const host = this.$refs.host;
+        try {
+            const { mountAboutPanel } = await import('/extensions/oneyes/about-panel.js');
+            if (host.isConnected) this.disposeOneYes = await mountAboutPanel(host);
+            if (!host.isConnected) this.disposeOneYes?.();
+        } catch { host.textContent = '关于页面加载失败，请关闭设置后重新打开。'; }
+    },
+    beforeUnmount() { this.disposeOneYes?.(); }
+};\n`);
 await writeFile(path.join(destination, 'oneyes-native.js'), `import {${settings} as useSettingsDialog} from './assets/${dialog}';
+import {${nextTick} as nextTick} from './assets/${vue}';
 export {${h} as h} from './assets/${vue}';
 export let section = 'account';
-export function openSettings(value = 'account') {
+export async function openSettings(value = 'account') {
     section = ['account', 'models', 'tasks', 'updates'].includes(value) ? value : 'account';
-    useSettingsDialog().show('user');
+    const panel = section === 'updates' ? 'about' : 'user';
+    const settings = useSettingsDialog();
+    if (!document.querySelector(panel === 'about' ? '.oneyes-about-settings' : '.oneyes-user-settings')) {
+        settings.hide();
+        await nextTick();
+    }
+    settings.show(panel);
     window.dispatchEvent(new CustomEvent('oneyes:panel', { detail: section }));
 }\n`);
 let graphSource = await readFile(path.join(assets, graph), 'utf8');
@@ -75,5 +103,5 @@ await writeFile(path.join(assets, auth[0]), `function useAuthDialogs() {
     };
 }
 export { useAuthDialogs as ${authExport} };\n`);
-await writeFile(path.join(destination, 'oneyes-frontend.json'), JSON.stringify({ schema: 1, frontendVersion: frontend.version, userPanel: user[0], nativeUserPanel: true, oneYesAccountButton: true, authModule: auth[0] }, null, 2) + '\n');
+await writeFile(path.join(destination, 'oneyes-frontend.json'), JSON.stringify({ schema: 1, frontendVersion: frontend.version, userPanel: user[0], aboutPanel: about[0], nativeUserPanel: true, oneYesAccountButton: true, authModule: auth[0] }, null, 2) + '\n');
 console.log('Prepared ComfyUI frontend with OneYes account settings and sign-in entry points');

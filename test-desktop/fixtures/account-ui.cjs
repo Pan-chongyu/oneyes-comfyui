@@ -55,6 +55,19 @@ runtime.createRuntime = options => {
     return engine;
 };
 const service = require('../../desktop/account.cjs'), createAccount = service.createAccount;
+const updateService = require('../../desktop/updater.cjs');
+let updateChanged, finishUpdateCheck, checkCalls = 0, installCalls = 0;
+let updateState = { status: 'idle', supported: true, version: '', progress: 0, error: '', notes: '' };
+const pushUpdate = value => { updateState = { ...updateState, ...value }; updateChanged(); };
+updateService.createUpdater = options => {
+    updateChanged = options.changed;
+    return {
+        state: () => updateState,
+        check: () => { checkCalls++; pushUpdate({ status: 'checking' }); return new Promise(resolve => { finishUpdateCheck = resolve; }); },
+        apply: async () => { installCalls++; pushUpdate({ status: 'installing' }); },
+        start: async () => {}, close: () => {},
+    };
+};
 let shared = false, identity = 17, passed = false;
 const portrait = nativeImage.createFromPath(path.resolve('desktop/resources/icon.png'));
 const avatars = [portrait.resize({ width: 96, height: 48 }).toDataURL(), portrait.resize({ width: 48, height: 96 }).toDataURL()];
@@ -125,11 +138,13 @@ app.on('browser-window-created', (_event, window) => {
             assert.equal(button.title, '登录 OneYes，使用云端模型');
             window.focus();
             window.webContents.focus();
+            await waitFor(window, `document.hasFocus()`);
             window.webContents.sendInputEvent({ type: 'mouseMove', x: button.x, y: button.y });
             window.webContents.sendInputEvent({ type: 'mouseDown', button: 'left', clickCount: 1, x: button.x, y: button.y });
             window.webContents.sendInputEvent({ type: 'mouseUp', button: 'left', clickCount: 1, x: button.x, y: button.y });
             await waitFor(window, `Boolean(document.querySelector('[data-testid="settings-dialog"] #login-form'))`);
             assert.equal(await js(`Boolean(document.querySelector('.oneyes-panel'))`), true);
+            assert.equal(await js(`Boolean(document.querySelector('#oneyes-tab-updates') || document.querySelector('#check-update'))`), false, 'The account page must not keep a second update entry');
             assert.doesNotMatch(await js(`document.querySelector('[data-testid="settings-dialog"]').textContent`), /Comfy 账户|登录您的帐户/);
             assert.equal(await js(`document.querySelector('#account-entry').hidden`), false);
             assert.equal(await js(`document.querySelector('#manual-key-section').open`), false);
@@ -235,8 +250,39 @@ app.on('browser-window-created', (_event, window) => {
             await js(`document.querySelector('#oneyes-tab-models').click()`);
             assert.equal(await js(`document.querySelector('#models').hidden`), false);
             await js(`window.oneYesDesktop.openSettings('updates')`);
-            await waitFor(window, `document.querySelector('#updates')?.hidden===false`);
+            await waitFor(window, `Boolean(document.querySelector('.oneyes-about-settings #check-update'))`);
+            assert.equal(await js(`Boolean(document.querySelector('.oneyes-user-settings'))`), false, 'Update shortcuts must select About even when User settings is already open');
             assert.equal(BrowserWindow.getAllWindows().length, 1, 'Menus must reuse the native settings dialog');
+            assert.match(await js(`document.querySelector('#update-version').textContent`), new RegExp(app.getVersion()));
+            assert.equal(await js(`document.querySelector('.oneyes-component-info').open`), false, 'Keep the original component and system information folded');
+            await js(`document.querySelector('#check-update').click()`);
+            await waitFor(window, `document.querySelector('#update-label').textContent==='正在检查更新…' && document.querySelector('#check-update').disabled`);
+            assert.equal(checkCalls, 1);
+            pushUpdate({ status: 'downloading', version: '9.9.9', progress: 42 });
+            await waitFor(window, `document.querySelector('#update-progress').value===42 && !document.querySelector('#update-progress').hidden`);
+            pushUpdate({ status: 'ready', progress: 100 }); finishUpdateCheck();
+            await waitFor(window, `!document.querySelector('#install-update').hidden && !document.querySelector('#install-update').disabled`);
+            if (process.env.COMFY_UI_SCREENSHOT) fs.writeFileSync(process.env.COMFY_UI_SCREENSHOT.replace(/\.png$/, '-about.png'), (await window.webContents.capturePage()).toPNG());
+            await js(`document.querySelector('#install-update').click()`);
+            await waitFor(window, `document.querySelector('#update-label').textContent==='正在安装并重新打开…'`);
+            assert.equal(installCalls, 1, 'The About action must invoke the installer');
+            pushUpdate({ status: 'error', error: '测试更新失败，可重试' });
+            await waitFor(window, `document.querySelector('#update-detail').textContent==='测试更新失败，可重试' && !document.querySelector('#check-update').disabled`);
+            await js(`window.oneYesDesktop.openSettings('account')`);
+            await waitFor(window, `Boolean(document.querySelector('#account-summary')&&!document.querySelector('#account-summary').hidden)`);
+            await js(`[...document.querySelectorAll('[data-testid="settings-dialog"] span')].find(label=>label.textContent.trim()==='关于').click()`);
+            await waitFor(window, `Boolean(document.querySelector('.oneyes-about-settings #check-update'))`);
+            pushUpdate({ status: 'current', error: '' });
+            await waitFor(window, `document.querySelector('#update-label').textContent==='当前已是最新版本'`);
+            assert.equal(await js(`document.querySelectorAll('#updates').length`), 1, 'Sidebar About must own the single update surface');
+            await js(`[...document.querySelectorAll('[data-testid="settings-dialog"] [role="button"]')].find(item=>item.textContent.trim()==='用户').click()`);
+            await waitFor(window, `Boolean(document.querySelector('#account-summary')&&!document.querySelector('#account-summary').hidden)`);
+            assert.equal(await js(`document.querySelector('#account').hidden`), false, 'Returning through the native User item must not select the removed update tab');
+            Menu.getApplicationMenu().items[0].submenu.items.find(item=>item.label==='检查更新').click();
+            await waitFor(window, `Boolean(document.querySelector('.oneyes-about-settings #check-update'))`);
+            await waitFor(window, `document.querySelector('#update-label').textContent==='正在检查更新…'`);
+            assert.equal(checkCalls, 2, 'The system menu must reach About and request a check');
+            pushUpdate({ status: 'current' }); finishUpdateCheck();
             window.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
             window.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
             await waitFor(window, `!document.querySelector('.oneyes-panel')`);

@@ -46,23 +46,15 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
         };
     }
     window.addEventListener('oneyes:panel', navigate);
-    navigate(initialSection);
+    navigate(['account', 'models', 'tasks'].includes(initialSection) ? initialSection : 'account');
     function configured(values) { for (const name of profiles) $(name + '-configured').textContent = values[name] ? '已保存' : ''; }
     function render(state) {
         if (!root.isConnected) return;
         current = state;
         $('version').textContent = 'v' + state.version;
-        $('update-version').textContent = `当前版本 v${state.version} · ${state.arch}`;
         if (state.platform === 'darwin') root.classList.add('macos');
         if (state.configured) configured(state.configured);
         renderAccount(state.account);
-        const update = state.update;
-        $('update-label').textContent = ({ idle: '尚未检查更新', checking: '正在检查更新…', downloading: `正在下载 v${update.version} · ${Math.round(update.progress)}%`, ready: `v${update.version} 已准备好`, current: '当前已是最新版本', error: '更新未完成', installing: '正在安装并重新打开…' })[update.status] || update.status;
-        $('update-detail').textContent = update.error || update.notes || '更新清单采用独立 Ed25519 签名，下载后校验 SHA-256。';
-        $('update-progress').hidden = !['downloading', 'installing'].includes(update.status);
-        $('update-progress').value = update.progress;
-        $('install-update').hidden = update.status !== 'ready';
-        $('check-update').disabled = ['checking', 'downloading', 'installing'].includes(update.status) || !update.supported;
     }
     function renderAccount(account) {
         if (!root.isConnected) return;
@@ -205,8 +197,6 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
     action('register-account', () => bridge.openAccountPage('register'));
     action('forgot-password', () => bridge.openAccountPage('forgot-password'));
     action('open-data', () => bridge.openData());
-    action('check-update', () => bridge.checkUpdate());
-    action('install-update', () => bridge.installUpdate());
     function renderModels() {
         $('model-list').replaceChildren();
         const values = modelValues.filter(value => value.toLowerCase().includes($('model-search').value.toLowerCase()));
