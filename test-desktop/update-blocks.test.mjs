@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { randomBytes, createHash, generateKeyPairSync, sign } from 'node:crypto';
+import { createHash, generateKeyPairSync, sign } from 'node:crypto';
 import { mkdtemp, mkdir, writeFile, readFile, copyFile, rm, readdir, stat, utimes } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -21,7 +21,8 @@ const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 async function fixture(t, target = targets[0]) {
     const directory = await mkdtemp(join(tmpdir(), 'comfy-blocks-'));
     t.after(() => rm(directory, { recursive: true, force: true }));
-    const original = randomBytes(512 * 1024), next = Buffer.concat([original.subarray(0, 150000), randomBytes(4096), original.subarray(150000)]);
+    const original = Buffer.concat(Array.from({ length: 65536 }, (_, n) => createHash('sha256').update(String(n)).digest()));
+    const next = Buffer.concat([original.subarray(0, 150000), Buffer.alloc(4096, 0x7b), original.subarray(150000)]);
     const { privateKey, publicKey } = generateKeyPairSync('ed25519');
     async function entry(version, bytes) {
         const file = filename(version, target.platform, target.arch, target.format), disk = join(directory, file);
