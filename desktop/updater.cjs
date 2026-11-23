@@ -108,7 +108,7 @@ function createUpdater({ currentVersion, directory, target, fetcher, install, ch
                 await result.body?.cancel(); await discard(); offset = 0;
                 result = await fetcher(url, { signal: controller.signal, cache: 'no-store' });
             } else if (result.status === 200) offset = 0;
-            if (!result.ok) { resumable = false; await result.body?.cancel(); throw Object.assign(new Error('连接更新服务失败，请检查网络或代理后重试'), { status: result.status }); }
+            if (!result.ok) { resumable = [408, 429].includes(result.status) || result.status >= 500; await result.body?.cancel(); throw Object.assign(new Error('连接更新服务失败，请检查网络或代理后重试'), { status: result.status }); }
             if (result.status !== 200 && !(validRange && offset)) { invalid = true; await result.body?.cancel(); throw new Error('更新包续传响应无效，请重试'); }
             if (!result.body) throw new Error('更新包下载失败，请重试');
             const etag = result.headers.get('etag');

@@ -124,6 +124,25 @@ test('a damaged cached base cannot be used or installed', async t => {
     assert.equal(updater.state().status, 'error');
 });
 
+test('a temporary blockmap error never starts a full installer download, and retry resumes incremental mode', async t => {
+    const f = await fixture(t);
+    await f.cacheBase();
+    let unavailable = true;
+    const updater = createUpdater({ currentVersion: '0.1.17', directory: f.directory, target: async () => targets[0], publicKey: f.publicKey, install: async () => {}, fetcher: async (url, init = {}) => {
+        if (unavailable && url === f.current.blockmap.url) return new Response('unavailable', { status: 503 });
+        return f.fetcher(url, init);
+    } });
+    t.after(() => updater.close());
+    await updater.check();
+    assert.equal(updater.state().status, 'error');
+    assert.equal(f.requests.some(x => x.url === f.current.url), false);
+    unavailable = false;
+    await updater.check();
+    assert.equal(updater.state().status, 'ready');
+    assert.equal(updater.state().mode, 'delta');
+    assert.deepEqual(await readFile(join(f.directory, 'ota', '0.1.18', f.current.file)), f.next);
+});
+
 test('blockmap parser rejects incomplete installers', async t => {
     const f = await fixture(t);
     await assert.rejects(readBlockmap(f.base.mapFile, f.base.size + 1), /分块索引/);
