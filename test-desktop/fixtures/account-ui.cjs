@@ -249,6 +249,7 @@ app.on('browser-window-created', (_event, window) => {
             await waitFor(window, `(async()=>{const state=await window.oneYesDesktop.state();return state.account.user.id===18&&state.account.connected})()`);
             await js(`document.querySelector('#oneyes-tab-models').click()`);
             assert.equal(await js(`document.querySelector('#models').hidden`), false);
+            await js(`window.comfyAPI.app.app.ui.settings.setSettingValueAsync('Comfy.Locale','en')`);
             await js(`window.oneYesDesktop.openSettings('updates')`);
             await waitFor(window, `Boolean(document.querySelector('.oneyes-about-settings #check-update'))`);
             assert.equal(await js(`Boolean(document.querySelector('.oneyes-user-settings'))`), false, 'Update shortcuts must select About even when User settings is already open');
@@ -270,12 +271,12 @@ app.on('browser-window-created', (_event, window) => {
             await waitFor(window, `document.querySelector('#update-detail').textContent==='测试更新失败，可重试' && !document.querySelector('#check-update').disabled`);
             await js(`window.oneYesDesktop.openSettings('account')`);
             await waitFor(window, `Boolean(document.querySelector('#account-summary')&&!document.querySelector('#account-summary').hidden)`);
-            await js(`[...document.querySelectorAll('[data-testid="settings-dialog"] span')].find(label=>label.textContent.trim()==='关于').click()`);
+            await js(`[...document.querySelectorAll('[data-testid="settings-dialog"] [role="button"]')].find(item=>/^(关于|About)$/.test(item.textContent.trim())).click()`);
             await waitFor(window, `Boolean(document.querySelector('.oneyes-about-settings #check-update'))`);
             pushUpdate({ status: 'current', error: '' });
             await waitFor(window, `document.querySelector('#update-label').textContent==='当前已是最新版本'`);
             assert.equal(await js(`document.querySelectorAll('#updates').length`), 1, 'Sidebar About must own the single update surface');
-            await js(`[...document.querySelectorAll('[data-testid="settings-dialog"] [role="button"]')].find(item=>item.textContent.trim()==='用户').click()`);
+            await js(`[...document.querySelectorAll('[data-testid="settings-dialog"] [role="button"]')].find(item=>/^(用户|User)$/.test(item.textContent.trim())).click()`);
             await waitFor(window, `Boolean(document.querySelector('#account-summary')&&!document.querySelector('#account-summary').hidden)`);
             assert.equal(await js(`document.querySelector('#account').hidden`), false, 'Returning through the native User item must not select the removed update tab');
             Menu.getApplicationMenu().items[0].submenu.items.find(item=>item.label==='检查更新').click();
