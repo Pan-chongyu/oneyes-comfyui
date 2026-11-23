@@ -7,7 +7,8 @@ import path from 'node:path';
 const require = createRequire(import.meta.url), { createRuntime } = require('../desktop/runtime.cjs');
 const directory = process.env.ONEYES_SMOKE_DIR || await mkdtemp(path.join(os.tmpdir(), 'oneyes-comfy-smoke-'));
 await mkdir('.runtime', { recursive: true });
-const resources = await mkdtemp(path.join(path.resolve('.runtime'), '离线 安装-'));
+const packaged = process.env.ONEYES_SMOKE_RESOURCES;
+const resources = packaged ? path.resolve(packaged) : await mkdtemp(path.join(path.resolve('.runtime'), '离线 安装-'));
 const moved = [];
 // Relocate the distribution, including native libraries, just as a user installation does.
 // No uv binary or system virtualenv is available at the installed resources path.
@@ -45,7 +46,7 @@ await writeFile(path.join(fixture, 'elevenlabs.py'), await readFile('test-deskto
 await writeFile(path.join(fixture, '__init__.py'), (await readFile(path.join(fixture, '__init__.py'), 'utf8')) + '\nfrom . import native_cloud, builtin_nodes, elevenlabs\n');
 const runtime = createRuntime({ resources, directory, changed: state => console.log(JSON.stringify({ status: state.status, phase: state.phase, message: state.message })) });
 try {
-    for (const name of ['python', 'engine', 'frontend']) { await rename(path.join(originalResources, name), path.join(resources, name)); moved.push(name); }
+    if (!packaged) for (const name of ['python', 'engine', 'frontend']) { await rename(path.join(originalResources, name), path.join(resources, name)); moved.push(name); }
     await runtime.launch();
     const origin = runtime.state().url;
     const page = await fetch(origin + '/');
@@ -120,6 +121,6 @@ try {
 } finally {
     await runtime.stop();
     for (const name of moved.reverse()) await rename(path.join(resources, name), path.join(originalResources, name));
-    await rm(resources, { recursive: true, force: true });
+    if (!packaged) await rm(resources, { recursive: true, force: true });
     if (!process.env.ONEYES_SMOKE_DIR) await rm(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 250 });
 }

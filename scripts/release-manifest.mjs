@@ -28,11 +28,9 @@ for (const name of expected) {
     const target = targets.find(t => name === filename(version, t.platform, t.arch, t.format));
     if (target) {
         const entry = { file: name, url: `${RELEASE_ROOT}/download/oneyes-v${version}/${name}`, size, sha256 };
-        if (target.platform === 'win32') {
-            const file = name + '.blockmap', bytes = await readFile(path.join(directory, file));
-            entry.blockmap = { file, url: `${RELEASE_ROOT}/download/oneyes-v${version}/${file}`, size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
-            sums.push(`${entry.blockmap.sha256}  ${file}`);
-        }
+        const file = name + '.blockmap', bytes = await readFile(path.join(directory, file));
+        entry.blockmap = { file, url: `${RELEASE_ROOT}/download/oneyes-v${version}/${file}`, size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };
+        sums.push(`${entry.blockmap.sha256}  ${file}`);
         platforms[platformKey(target)] = entry;
     }
 }

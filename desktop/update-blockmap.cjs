@@ -11,14 +11,20 @@ async function readBlockmap(file, size) {
     return map;
 }
 
+function planBlocks(oldMap, newMap, size) {
+    const operations = computeOperations(oldMap, newMap, { info() {}, warn() {} });
+    const total = operations.filter(op => op.kind === OperationKind.DOWNLOAD).reduce((n, op) => n + op.end - op.start, 0);
+    if (operations.reduce((n, op) => n + op.end - op.start, 0) !== size) throw new Error('更新分块计划无效');
+    return { operations, total, reused: size - total };
+}
+
 // Electron's tested block matching, with our signed metadata, proxy transport,
 // cancellation and durable partial file. No installer is executed until the
 // reconstructed file has passed the signed full-file SHA-256 check.
 async function downloadBlocks({ baseFile, oldMapFile, newMapFile, base, entry, outputFile, fetcher, signal, changed = () => {} }) {
     const [oldMap, newMap] = await Promise.all([readBlockmap(oldMapFile, base.size), readBlockmap(newMapFile, entry.size)]);
-    const operations = computeOperations(oldMap, newMap, { info() {}, warn() {} });
-    const total = operations.filter(op => op.kind === OperationKind.DOWNLOAD).reduce((n, op) => n + op.end - op.start, 0);
-    if (operations.reduce((n, op) => n + op.end - op.start, 0) !== entry.size || total >= entry.size) throw new Error('此版本无法复用本机安装包');
+    const { operations, total } = planBlocks(oldMap, newMap, entry.size);
+    if (total >= entry.size) throw new Error('此版本无法复用本机安装包');
     const receipt = outputFile + '.json', identity = JSON.stringify([base.sha256, entry.sha256, base.blockmap.sha256, entry.blockmap.sha256]);
     const discard = async () => { await fs.rm(outputFile, { force: true }); await fs.rm(receipt, { force: true }); };
     let offset = 0, validator;
@@ -49,6 +55,10 @@ async function downloadBlocks({ baseFile, oldMapFile, newMapFile, base, entry, o
                 let response;
                 try { response = await fetcher(entry.url, { signal, cache: 'no-store', headers: { Range: `bytes=${start}-${end}`, ...(validator ? { 'If-Range': validator } : {}) } }); }
                 catch (error) { error.resumableDownload = true; throw error; }
+                if ([408, 429].includes(response.status) || response.status >= 500) {
+                    await response.body?.cancel();
+                    throw Object.assign(new Error('更新服务暂时不可用，重试后将继续下载'), { resumableDownload: true, status: response.status });
+                }
                 const range = `bytes ${start}-${end}/${entry.size}`, etag = response.headers.get('etag');
                 if (response.status !== 206 || response.headers.get('content-range') !== range || !response.body || validator && etag && validator !== etag) {
                     await response.body?.cancel();
@@ -76,4 +86,4 @@ async function downloadBlocks({ baseFile, oldMapFile, newMapFile, base, entry, o
     } finally { try { await handle.sync(); } finally { await handle.close(); } }
 }
 
-module.exports = { readBlockmap, downloadBlocks };
+module.exports = { readBlockmap, planBlocks, downloadBlocks };

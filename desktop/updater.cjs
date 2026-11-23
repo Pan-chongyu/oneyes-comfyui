@@ -159,17 +159,17 @@ function createUpdater({ currentVersion, directory, target, fetcher, install, ch
         await fs.mkdir(saved.folder, { recursive: true, mode: 0o700 });
         await fs.writeFile(path.join(saved.folder, 'comfy-latest.json'), saved.text, { mode: 0o600 });
         await fs.writeFile(path.join(saved.folder, 'comfy-latest.json.sig'), saved.signature, { mode: 0o600 });
-        const windowsBase = entry.blockmap ? await findBase(undefined, true) : null;
-        const base = windowsBase ? null : await findBase(entry.delta);
-        if (windowsBase) {
+        const blockBase = entry.blockmap ? await findBase(undefined, true) : null;
+        const base = blockBase ? null : await findBase(entry.delta);
+        if (blockBase) {
             const output = path.join(saved.folder, entry.file + '.blocks.part');
             emit({ status: 'downloading', mode: 'delta', phase: 'planning', error: '', progress: 0, downloaded: 0, total: 0, reused: 0 });
             try {
-                const oldMap = windowsBase.entry.blockmap, newMap = entry.blockmap;
-                const oldMapFile = path.join(windowsBase.folder, oldMap.file), newMapFile = path.join(saved.folder, newMap.file);
+                const oldMap = blockBase.entry.blockmap, newMap = entry.blockmap;
+                const oldMapFile = path.join(blockBase.folder, oldMap.file), newMapFile = path.join(saved.folder, newMap.file);
                 await downloadBytes(oldMap.url, oldMapFile, oldMap.size, oldMap.sha256, false);
                 await downloadBytes(newMap.url, newMapFile, newMap.size, newMap.sha256, false);
-                await downloadBlocks({ baseFile: windowsBase.file, oldMapFile, newMapFile, base: windowsBase.entry, entry, outputFile: output, fetcher, signal: controller.signal, changed: emit });
+                await downloadBlocks({ baseFile: blockBase.file, oldMapFile, newMapFile, base: blockBase.entry, entry, outputFile: output, fetcher, signal: controller.signal, changed: emit });
                 emit({ phase: 'reconstructing' });
                 await validateFile(output, entry);
                 await fs.rename(output, path.join(saved.folder, entry.file));

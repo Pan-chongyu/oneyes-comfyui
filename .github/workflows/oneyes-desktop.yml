@@ -64,6 +64,8 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - name: Verify packaged identity and bundled engine
         run: node scripts/verify-package.mjs
+      - name: Generate and validate incremental indexes for every OTA format
+        run: npm run release:blockmaps
       - uses: actions/upload-artifact@v4
         with:
           name: OneYes-ComfyUI-${{ matrix.platform }}-${{ matrix.arch }}
@@ -76,6 +78,7 @@ jobs:
             dist/*.deb
             dist/*.rpm
           if-no-files-found: error
+          compression-level: 0
       - uses: actions/upload-artifact@v4
         with:
           name: Verification-${{ matrix.platform }}-${{ matrix.arch }}

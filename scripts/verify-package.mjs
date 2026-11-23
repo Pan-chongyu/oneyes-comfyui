@@ -39,9 +39,16 @@ await access(path.join(resources, 'engine/oneyes/web/about-panel.html'));
 await access(path.join(resources, 'engine/oneyes/web/about-panel.js'));
 const python = await bundledPython(resources);
 const result = JSON.parse(execFileSync(python, ['-I', '-B', '-c', 'import sys,json,torch,torchvision,aiohttp,cryptography,comfyui_frontend_package; from backports import zstd; assert zstd.decompress(zstd.compress(b"native SPZ")) == b"native SPZ"; print(json.dumps({"prefix":sys.prefix,"torch":torch.__file__,"tensor":int(torch.ones(2).sum().item())}))'], { encoding: 'utf8', windowsHide: true }));
+const site = path.dirname(path.dirname(result.torch));
+await assert.rejects(access(path.join(site, 'comfyui_frontend_package/static')), 'The duplicated frontend must not be shipped');
+for (const backend of ['cuda', 'hip']) {
+    assert.ok(!(await readdir(path.join(site, 'comfy_kitchen/backends', backend))).some(name => /^_C.*\.(pyd|so)$/.test(name)), 'CPU packages must not ship unused GPU kernels');
+}
 assert.equal(path.resolve(result.prefix), path.join(resources, 'python'));
 assert.ok(result.torch.startsWith(path.join(resources, 'python') + path.sep));
 assert.equal(result.tensor, 2);
 if (process.platform === 'win32') for (const file of ['msvcp140.dll', 'vcruntime140.dll', 'vcruntime140_1.dll']) await access(path.join(resources, 'python', file));
+if (bundle) execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle]);
+execFileSync(process.execPath, ['scripts/smoke-engine.mjs'], { env: { ...process.env, ONEYES_SMOKE_RESOURCES: resources }, stdio: 'inherit', windowsHide: true });
 if (bundle) execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle]);
 console.log(JSON.stringify({ package: 'OneYes ComfyUI', version, platform: process.platform, arch: process.arch, identity: 'verified', bundledRuntime: 'verified' }));

@@ -54,5 +54,6 @@ if (previous?.requirements === identity && previous.pythonVersion === version &&
     await writeFile(path.join(prefix, 'oneyes-runtime.json'), JSON.stringify({ schema: 1, platform: process.platform, arch: process.arch, python: interpreter, pythonVersion: version, requirements: identity }, null, 2) + '\n');
     console.log(`Prepared offline runtime: Python ${version}, ${process.platform}-${process.arch}`);
 }
-execFileSync(python, ['-I', '-m', 'compileall', '-q', '-j', '2', '--invalidation-mode', 'unchecked-hash', path.join(prefix, process.platform === 'win32' ? 'Lib' : 'lib/python3.12'), path.join(root, 'desktop/engine')], { env, stdio: 'inherit', windowsHide: true });
+// Build-machine paths must not turn unchanged Python modules into new OTA blocks.
+execFileSync(python, ['-I', '-m', 'compileall', '-q', '-f', '-j', '2', '--invalidation-mode', 'unchecked-hash', '-s', path.join(root, 'desktop'), '-p', '/OneYes/ComfyUI', path.join(prefix, process.platform === 'win32' ? 'Lib' : 'lib/python3.12'), path.join(root, 'desktop/engine')], { env, stdio: 'inherit', windowsHide: true });
 console.log('Precompiled engine and dependencies for startup without modifying the installed app');

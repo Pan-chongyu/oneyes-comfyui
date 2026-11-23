@@ -259,8 +259,9 @@ app.on('browser-window-created', (_event, window) => {
             await js(`document.querySelector('#check-update').click()`);
             await waitFor(window, `document.querySelector('#update-label').textContent==='正在检查更新…' && document.querySelector('#check-update').disabled`);
             assert.equal(checkCalls, 1);
-            pushUpdate({ status: 'downloading', version: '9.9.9', progress: 42 });
+            pushUpdate({ status: 'downloading', version: '9.9.9', progress: 42, mode: 'delta', total: 104857600, downloaded: 44040192, reused: 943718400 });
             await waitFor(window, `document.querySelector('#update-progress').value===42 && !document.querySelector('#update-progress').hidden`);
+            assert.equal(await js(`document.querySelector('#update-transfer').textContent`), '增量下载 42.0 MB / 100.0 MB · 已复用 900.0 MB');
             pushUpdate({ status: 'ready', progress: 100 }); finishUpdateCheck();
             await waitFor(window, `!document.querySelector('#install-update').hidden && !document.querySelector('#install-update').disabled`);
             if (process.env.COMFY_UI_SCREENSHOT) fs.writeFileSync(process.env.COMFY_UI_SCREENSHOT.replace(/\.png$/, '-about.png'), (await window.webContents.capturePage()).toPNG());

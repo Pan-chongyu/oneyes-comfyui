@@ -4,7 +4,11 @@
 
 正式构建由 `.github/workflows/oneyes-desktop.yml` 按 `oneyes-vX.Y.Z` 标签启动，并使用相同标签发布 Release，与上游引擎版本分开。四个原生 Runner 先安装真实 ComfyUI CPU 环境，核对四种 OneYes 节点、19 个原版节点适配与本地工作流，测试通过后才构建。发布任务汇总 Windows x64 EXE、macOS ARM64 DMG / ZIP、Linux x64 / ARM64 AppImage / DEB / RPM，核对九个安装包并为八种 OTA 目标生成签名清单。
 
-固定更新地址：`https://github.com/Pan-chongyu/oneyes-comfyui/releases/latest/download/comfy-latest.json`，Detached Ed25519 签名为 `.sig`。每种芯片及 Linux 安装格式独立选择；更新前验证清单签名与包 SHA-256。后台每六小时检查并下载，显示进度、失败重试、安装与自动重新打开；Windows 有独立可视化安装助手。保留断点续传与 Windows blockmap 校验；首版没有可适用的旧版增量基包。
+固定更新地址：`https://github.com/Pan-chongyu/oneyes-comfyui/releases/latest/download/comfy-latest.json`，Detached Ed25519 签名为 `.sig`。每种芯片及 Linux 安装格式独立选择；更新前验证清单签名与包 SHA-256。后台每六小时检查并下载，显示进度、失败重试、安装与自动重新打开；Windows 有独立可视化安装助手。
+
+从 0.1.18 起，八种 OTA 格式全部发布有签名清单绑定的 blockmap，按字节复用本机已验证基包中的相同内容，只请求变化区间，流式重建后校验完整安装包。断线保留分块续传进度；408、429 和 5xx 暂停等待用户重试，不转为重复下载整包。基包缺失／损坏、不支持 Range 或重建校验失败才回退完整下载。“关于”显示实际下载量和复用量。旧客户端升级至此版、首次安装或缺少基包索引时仍需完整包；后续具备基包时自动使用增量。
+
+打包只保留定制前端，排除 Python 包内重复的原前端资源，以及固定 CPU 环境不可使用的 CUDA／HIP 编译内核；保留 Python 接口、CPU 内核、原版节点依赖、模板预览和许可证。预编译字节码使用稳定路径，资源归一化文件时间，避免不同构建目录及归档头导致无意义差异；macOS 签名后也归一化时间并再次验证签名。发布前执行 `npm test`、真实账号界面与引擎测试，打包后再次用包内环境执行完整离线工作流并验证 macOS 签名；每个平台运行 `npm run release:blockmaps` 后上传，签名任务缺少任一 OTA 索引就停止发布。测试覆盖八种格式的增量重建、断点续传、Range 降级、暂时故障、损坏包拒绝安装和旧缓存清理。
 
 历史 OTA 包按现有 updater 清理策略保留当前基包和正在下载的新版，其余清理。从 0.1.5 起，完整独立 Python、CPU 依赖和前端随安装包及 OTA 一起提供，不再在用户电脑下载依赖；模型、工作流、任务与 Key 仍位于用户数据目录，覆盖安装不会删除。旧版用户目录的运行环境不再使用，原数据保留。macOS 应用使用 ad-hoc 签名，未经过 Apple 公证；OTA 密码学验证与 Apple 公证是不同机制。
 

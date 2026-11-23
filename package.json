@@ -1,7 +1,7 @@
 {
   "name": "oneyes-comfyui",
   "productName": "OneYes ComfyUI",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "private": true,
   "description": "ComfyUI with integrated OneYes accounts and cloud nodes",
   "author": "OneYes",
@@ -18,6 +18,7 @@
     "test:python": "python -m unittest discover -s test-oneyes -v",
     "test:engine": "node scripts/smoke-engine.mjs",
     "pack": "electron-builder --publish never",
+    "release:blockmaps": "node scripts/prepare-ota-blockmaps.mjs dist",
     "release:manifest": "node scripts/release-manifest.mjs release"
   },
   "dependencies": {
@@ -31,6 +32,7 @@
   },
   "build": {
     "appId": "ai.oneyes.comfyui",
+    "beforePack": "scripts/normalize-resources.cjs",
     "productName": "OneYes ComfyUI",
     "directories": {
       "output": "dist",
@@ -56,7 +58,12 @@
       },
       {
         "from": "desktop/python",
-        "to": "python"
+        "to": "python",
+        "filter": [
+          "**/*",
+          "!**/comfyui_frontend_package/static{,/**}",
+          "!**/comfy_kitchen/backends/{cuda,hip}/_C*.{pyd,so}"
+        ]
       },
       {
         "from": "LICENSE",
