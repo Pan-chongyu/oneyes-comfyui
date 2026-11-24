@@ -20,10 +20,32 @@ const vue = files.find(file => /^vendor-vue-core-[^.]+\.js$/.test(file));
 const dialog = files.find(file => /^dialogService-[^.]+\.js$/.test(file));
 const graph = files.find(file => /^GraphView-[^.]+\.js$/.test(file));
 const auth = files.filter(file => /^useAuthDialogs-[^.]+\.js$/.test(file));
+let locale;
+for (const file of files.filter(file => /^i18n-[^.]+\.js$/.test(file))) if ((await readFile(path.join(assets, file), 'utf8')).includes('function getDefaultLocale()')) {
+    assert.equal(locale, undefined, 'Pinned frontend has multiple locale modules');
+    locale = file;
+}
 assert.equal(user.length, 1, 'Pinned frontend user panel has changed; review the integration before publishing');
 assert.equal(about.length, 1, 'Pinned frontend about panel has changed; review the update integration before publishing');
 assert.ok(vue && dialog && graph);
 assert.equal(auth.length, 1, 'Pinned frontend authentication module has changed');
+assert.ok(locale, 'Pinned frontend locale module has changed');
+let localeSource = await readFile(path.join(assets, locale), 'utf8');
+assert.ok(localeSource.includes('function getDefaultLocale(){return resolveSupportedLocale(navigator.languages)}'), 'Review the default language before upgrading the frontend');
+localeSource = localeSource.replace('function getDefaultLocale(){return resolveSupportedLocale(navigator.languages)}', 'function getDefaultLocale(){return`zh`}');
+assert.ok(localeSource.includes('await loadLocale(n),y.global.locale.value=n,n'), 'Review language switching before upgrading the frontend');
+await writeFile(path.join(assets, locale), localeSource.replace('await loadLocale(n),y.global.locale.value=n,n', 'await loadLocale(n),document.documentElement.lang=n===`zh`?`zh-CN`:n,y.global.locale.value=n,n'));
+const setLocale = localeSource.match(/\bsetActiveLocale as (\w+)/)?.[1];
+assert.ok(setLocale, 'Pinned frontend language loader export has changed');
+const workflows = files.find(file => /^workflowStore-[^.]+\.js$/.test(file));
+assert.ok(workflows, 'Pinned frontend workflow store has changed');
+const workflowSource = await readFile(path.join(assets, workflows), 'utf8');
+assert.equal([...workflowSource.matchAll(/`Unsaved Workflow\.json`/g)].length, 2, 'Review default workflow naming before upgrading the frontend');
+await writeFile(path.join(assets, workflows), `import {d as oneYesTranslate} from './${locale}';\n` + workflowSource.replaceAll('`Unsaved Workflow.json`', '(oneYesTranslate("g.untitled")+".json")'));
+const htmlFile = path.join(destination, 'index.html');
+const html = await readFile(htmlFile, 'utf8');
+assert.ok(html.includes('<html lang="en">') && html.includes('aria-label="Loading ComfyUI"'), 'Review the frontend startup translation before upgrading');
+await writeFile(htmlFile, html.replace('<html lang="en">', '<html lang="zh-CN">').replace('aria-label="Loading ComfyUI"', 'aria-label="正在加载 OneYes ComfyUI"').replace('<title>ComfyUI</title>', '<title>OneYes ComfyUI</title>'));
 const vueSource = await readFile(path.join(assets, vue), 'utf8'), dialogSource = await readFile(path.join(assets, dialog), 'utf8');
 const h = vueSource.match(/\bh as (\w+)/)?.[1], nextTick = vueSource.match(/\bnextTick as (\w+)/)?.[1], settings = dialogSource.match(/\buseSettingsDialog as (\w+)/)?.[1];
 assert.ok(h && nextTick && settings, 'Pinned frontend exports have changed');
@@ -58,6 +80,7 @@ export default {
 await writeFile(path.join(destination, 'oneyes-native.js'), `import {${settings} as useSettingsDialog} from './assets/${dialog}';
 import {${nextTick} as nextTick} from './assets/${vue}';
 export {${h} as h} from './assets/${vue}';
+export {${setLocale} as setLocale} from './assets/${locale}';
 export let section = 'account';
 export async function openSettings(value = 'account') {
     section = ['account', 'models', 'tasks', 'updates'].includes(value) ? value : 'account';

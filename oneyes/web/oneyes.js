@@ -2,6 +2,7 @@ import { app } from "../../scripts/app.js";
 import { api } from "../../scripts/api.js";
 
 let nativeNodes = {};
+let initializeChinese = false;
 
 async function request(path, options) {
     const response = await api.fetchApi(`/oneyes/${path}`, options);
@@ -71,6 +72,7 @@ async function chooseModel(node) {
 
 app.registerExtension({
     name: "OneYes.Integration",
+    settings: [{ id: 'OneYes.ChineseUIInitialized', name: '中文界面初始化', type: 'hidden', defaultValue: false }],
     commands: window.oneYesDesktop ? [
         { id: 'OneYes.Account', label: 'OneYes 账户与 Key', function: () => showSettings() },
         { id: 'OneYes.Models', label: 'OneYes 可用模型', function: () => showSettings('models') },
@@ -79,10 +81,23 @@ app.registerExtension({
     ] : [],
     menuCommands: window.oneYesDesktop ? [{ path: ['OneYes'], commands: ['OneYes.Account', 'OneYes.Models', 'OneYes.Tasks', 'OneYes.Updates'] }] : [],
     async init() {
+        if (window.oneYesDesktop && !app.ui.settings.getSettingValue('OneYes.ChineseUIInitialized')) {
+            initializeChinese = true;
+            await app.ui.settings.setSettingValueAsync('Comfy.Locale', 'zh');
+        }
+        if (window.oneYesDesktop) {
+            const { setLocale } = await import('/oneyes-native.js');
+            await setLocale(app.ui.settings.getSettingValue('Comfy.Locale'));
+        }
         if (window.oneYesDesktop && !app.ui.settings.getSettingValue('Comfy.TutorialCompleted')) await app.ui.settings.setSettingValueAsync('Comfy.TutorialCompleted', true);
         nativeNodes = await request('native-nodes');
     },
     async setup() {
+        if (initializeChinese) {
+            // Existing English sessions can register node titles before the locale migration.
+            await app.reloadNodeDefs();
+            await app.ui.settings.setSettingValueAsync('OneYes.ChineseUIInitialized', true);
+        }
         const style = document.createElement("style");
         style.textContent = `.oneyes-dialog{background:var(--comfy-menu-bg,#202024);color:var(--input-text,#eee);border:1px solid #6666;border-radius:14px;padding:24px;width:min(520px,90vw);max-height:80vh}.oneyes-dialog::backdrop{background:#0009}.oneyes-dialog h2{font-size:19px;margin:0 70px 20px 0}.oneyes-dialog label{display:block;margin:16px 0 6px}.oneyes-dialog input{display:block;width:100%;box-sizing:border-box;margin:7px 0;padding:10px;background:var(--comfy-input-bg,#303035);color:inherit;border:1px solid #8886;border-radius:7px}.oneyes-dialog button{padding:9px 13px;border-radius:7px;cursor:pointer}.oneyes-close{position:absolute;right:20px;top:18px}.oneyes-models{display:grid;gap:5px;max-height:48vh;overflow:auto}.oneyes-models button{text-align:left;overflow-wrap:anywhere}.oneyes-dialog p{line-height:1.6;font-size:13px}`;
         document.head.append(style);

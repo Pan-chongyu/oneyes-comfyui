@@ -126,7 +126,22 @@ else {
         handle('tasks', () => localRequest('tasks'), true);
         handle('update-check', () => updater.check(), true);
         handle('update-install', () => updater.apply(), true);
-        const menu = [{ label: 'OneYes', submenu: [{ label: 'OneYes 账户与 Key', accelerator: 'CmdOrCtrl+,', click: () => void settings() }, { label: '打开画布', click: showWindow }, { label: '检查更新', click: () => { void settings('updates'); void updater.check(); } }, { type: 'separator' }, { label: '退出', accelerator: 'CmdOrCtrl+Q', click: () => { quitting = true; app.quit(); } }] }, { role: 'editMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' }];
+        const menu = [
+            { label: 'OneYes', submenu: [{ label: 'OneYes 账户与 Key', accelerator: 'CmdOrCtrl+,', click: () => void settings() }, { label: '打开画布', click: showWindow }, { label: '检查更新', click: () => { void settings('updates'); void updater.check(); } }, { type: 'separator' }, { label: '退出', accelerator: 'CmdOrCtrl+Q', click: () => { quitting = true; app.quit(); } }] },
+            { label: '编辑', submenu: [
+                { role: 'undo', label: '撤销' }, { role: 'redo', label: '重做' }, { type: 'separator' },
+                { role: 'cut', label: '剪切' }, { role: 'copy', label: '复制' }, { role: 'paste', label: '粘贴' },
+                { role: 'pasteAndMatchStyle', label: '粘贴并匹配样式' }, { role: 'delete', label: '删除' }, { role: 'selectAll', label: '全选' },
+            ] },
+            { label: '视图', submenu: [
+                { role: 'reload', label: '重新加载' }, { role: 'forceReload', label: '强制重新加载' }, { role: 'toggleDevTools', label: '开发者工具' }, { type: 'separator' },
+                { role: 'resetZoom', label: '实际大小' }, { role: 'zoomIn', label: '放大' }, { role: 'zoomOut', label: '缩小' }, { type: 'separator' }, { role: 'togglefullscreen', label: '切换全屏' },
+            ] },
+            { role: 'windowMenu', label: '窗口', submenu: [
+                { role: 'minimize', label: '最小化' }, { role: 'zoom', label: '缩放窗口' },
+                ...(process.platform === 'darwin' ? [{ type: 'separator' }, { role: 'front', label: '全部置于前面' }] : [{ role: 'close', label: '关闭窗口' }]),
+            ] },
+        ];
         Menu.setApplicationMenu(Menu.buildFromTemplate(menu));
         let icon = nativeImage.createFromPath(path.join(__dirname, 'resources', process.platform === 'darwin' ? 'trayTemplate.png' : 'icon.png'));
         if (process.platform === 'darwin') icon.setTemplateImage(true);

@@ -1,0 +1,35 @@
+{
+  "OneYesImage": {
+    "display_name": "OneYes 文生图",
+    "description": "异步生成图片并保存任务回执。重启后保留相同参数和任务种子，重新运行即可取回原任务。",
+    "inputs": { "model": { "name": "模型" }, "prompt": { "name": "提示词" }, "size": { "name": "尺寸" }, "quality": { "name": "质量" }, "seed": { "name": "任务种子" }, "control_after_generate": { "name": "生成后控制" } },
+    "outputs": { "0": { "name": "图片" }, "1": { "name": "本地任务编号" } }
+  },
+  "OneYesImageEdit": {
+    "display_name": "OneYes 参考图编辑",
+    "description": "按原分辨率上传参考图片进行编辑。保持任务种子可继续取回原任务。",
+    "inputs": { "images": { "name": "参考图片" }, "model": { "name": "模型" }, "prompt": { "name": "提示词" }, "size": { "name": "尺寸" }, "quality": { "name": "质量" }, "seed": { "name": "任务种子" }, "control_after_generate": { "name": "生成后控制" } },
+    "outputs": { "0": { "name": "图片" }, "1": { "name": "本地任务编号" } }
+  },
+  "OneYesRecoverImage": {
+    "display_name": "OneYes 取回图片任务",
+    "inputs": { "task_id": { "name": "本地任务编号", "tooltip": "从云端任务列表复制编号，只查询原任务，不创建新的生成请求。" } },
+    "outputs": { "0": { "name": "图片" }, "1": { "name": "本地任务编号" } }
+  },
+  "OneYesText": {
+    "display_name": "OneYes 文字生成",
+    "inputs": { "model": { "name": "模型" }, "prompt": { "name": "提示词" }, "system": { "name": "系统提示词" }, "temperature": { "name": "温度" } },
+    "outputs": { "0": { "name": "文本" } }
+  },
+  "OpenAIGPTImage1": {
+    "display_name": "OpenAI GPT 图像生成",
+    "description": "通过 OneYes 异步生成或编辑图片，任务回执保存在本机，可在重启后继续取回。",
+    "inputs": { "custom_height": { "name": "自定义高度" }, "custom_width": { "name": "自定义宽度" }, "seed": { "name": "任务种子", "tooltip": "用于本机任务去重；保留种子取回原任务，更换种子创建新任务。" } },
+    "outputs": { "0": { "name": "图片" } }
+  },
+  "OpenAIGPTImageNodeV2": {
+    "description": "通过 OneYes 异步生成或编辑图片，支持原分辨率参考图与遮罩，重启后可取回原任务。",
+    "inputs": { "seed": { "name": "任务种子", "tooltip": "用于本机任务去重；保留种子取回原任务，更换种子创建新任务。" } },
+    "outputs": { "0": { "name": "图片" } }
+  }
+}

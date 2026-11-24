@@ -1,0 +1,6 @@
+{
+  "g": { "nothingToDuplicate": "没有可复制的内容" },
+  "settingsCategories": { "OneYes": "OneYes", "Comfy": "通用", "Nodes 2_0": "新版节点", "Vue Nodes": "新版节点", "VueNodes": "新版节点" },
+  "nodeCategories": { "OneYes": "OneYes 云端模型" },
+  "notSupported": { "illustrationAlt": "暂不支持此功能" }
+}

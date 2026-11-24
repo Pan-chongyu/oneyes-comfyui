@@ -6,6 +6,12 @@ const assert = require('node:assert/strict');
 
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'comfy-account-ui-'));
 app.setPath('userData', directory);
+app.commandLine.appendSwitch('lang', 'en-US');
+if (process.env.COMFY_TEST_LEGACY_ENGLISH) {
+    const folder = path.join(directory, 'comfy/user/default');
+    fs.mkdirSync(folder, { recursive: true });
+    fs.writeFileSync(path.join(folder, 'comfy.settings.json'), JSON.stringify({ 'Comfy.Locale': 'en' }));
+}
 app.disableHardwareAcceleration();
 // Keep this test independent of an installed copy running under the same user.
 app.requestSingleInstanceLock = () => true;
@@ -127,6 +133,14 @@ app.on('browser-window-created', (_event, window) => {
         };
         try {
             await waitFor(window, `Boolean(document.querySelector('#graph-canvas') && window.comfyAPI?.app?.app?.graph)`);
+            await waitFor(window, `window.comfyAPI.app.app.ui.settings.getSettingValue('Comfy.Locale')==='zh' && document.documentElement.lang==='zh-CN' && window.comfyAPI.app.app.ui.settings.getSettingValue('OneYes.ChineseUIInitialized')===true`);
+            await waitFor(window, `Boolean(LiteGraph.registered_node_types.LoadImage && LiteGraph.registered_node_types.OneYesRecoverImage)`);
+            assert.equal(await js(`window.comfyAPI.app.app.ui.settings.getSettingValue('OneYes.ChineseUIInitialized')`), true);
+            assert.equal(await js(`(()=>{const node=LiteGraph.createNode('LoadImage');return node.title})()`), '加载图像');
+            assert.equal(await js(`(()=>{const node=LiteGraph.createNode('OneYesRecoverImage');return node.title})()`), 'OneYes 取回图片任务');
+            assert.doesNotMatch(await js(`document.body.textContent`), /Unsaved Workflow|Untitled|g\.untitled/);
+            assert.deepEqual(Menu.getApplicationMenu().items.slice(1).map(item => item.label), ['编辑', '视图', '窗口']);
+            assert.equal(Menu.getApplicationMenu().items[1].submenu.items.find(item => item.role === 'copy').label, '复制');
             assert.equal(BrowserWindow.getAllWindows().length, 1, 'Startup must open only the canvas window');
             assert.equal(await js(`Boolean(document.querySelector('[data-testid="settings-dialog"]'))`), false, 'Startup must not require a settings screen');
             assert.deepEqual((await js(`window.oneYesDesktop.state()`)).configured, { default: false, image: false, text: false, claude: false, gemini: false, grok: false, video: false });
@@ -143,6 +157,9 @@ app.on('browser-window-created', (_event, window) => {
             window.webContents.sendInputEvent({ type: 'mouseDown', button: 'left', clickCount: 1, x: button.x, y: button.y });
             window.webContents.sendInputEvent({ type: 'mouseUp', button: 'left', clickCount: 1, x: button.x, y: button.y });
             await waitFor(window, `Boolean(document.querySelector('[data-testid="settings-dialog"] #login-form'))`);
+            assert.match(await js(`document.querySelector('[data-testid="settings-dialog"]').textContent`), /设置/);
+            assert.match(await js(`document.querySelector('[data-testid="settings-dialog"]').textContent`), /外观/);
+            assert.doesNotMatch(await js(`document.querySelector('[data-testid="settings-dialog"]').textContent`), /Search Settings|GENERAL|Appearance|Mask Editor/);
             assert.equal(await js(`Boolean(document.querySelector('.oneyes-panel'))`), true);
             assert.equal(await js(`Boolean(document.querySelector('#oneyes-tab-updates') || document.querySelector('#check-update'))`), false, 'The account page must not keep a second update entry');
             assert.doesNotMatch(await js(`document.querySelector('[data-testid="settings-dialog"]').textContent`), /Comfy 账户|登录您的帐户/);
@@ -250,6 +267,10 @@ app.on('browser-window-created', (_event, window) => {
             await js(`document.querySelector('#oneyes-tab-models').click()`);
             assert.equal(await js(`document.querySelector('#models').hidden`), false);
             await js(`window.comfyAPI.app.app.ui.settings.setSettingValueAsync('Comfy.Locale','en')`);
+            await waitFor(window, `document.documentElement.lang==='en'`);
+            await window.webContents.loadURL(window.webContents.getURL());
+            await waitFor(window, `Boolean(window.comfyAPI?.app?.app?.graph) && document.documentElement.lang==='en'`);
+            assert.equal(await js(`window.comfyAPI.app.app.ui.settings.getSettingValue('Comfy.Locale')`), 'en', 'A language selected after migration must survive a reload');
             await js(`window.oneYesDesktop.openSettings('updates')`);
             await waitFor(window, `Boolean(document.querySelector('.oneyes-about-settings #check-update'))`);
             assert.equal(await js(`Boolean(document.querySelector('.oneyes-user-settings'))`), false, 'Update shortcuts must select About even when User settings is already open');
@@ -288,6 +309,8 @@ app.on('browser-window-created', (_event, window) => {
             window.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
             window.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
             await waitFor(window, `!document.querySelector('.oneyes-panel')`);
+            await js(`window.comfyAPI.app.app.ui.settings.setSettingValueAsync('Comfy.Locale','zh')`);
+            await waitFor(window, `document.documentElement.lang==='zh-CN'`);
             await js(`window.oneYesDesktop.openSettings('account')`);
             await waitFor(window, `Boolean(document.querySelector('#account-summary')&&!document.querySelector('#account-summary').hidden)`);
             assert.equal(await js(`document.querySelectorAll('.oneyes-panel').length`), 1);

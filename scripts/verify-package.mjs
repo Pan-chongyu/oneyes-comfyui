@@ -36,6 +36,8 @@ assert.match(await readFile(path.join(resources, 'frontend/assets', frontend.abo
 await access(path.join(resources, 'engine/oneyes/web/account-panel.html'));
 await access(path.join(resources, 'engine/oneyes/web/about-panel.html'));
 await access(path.join(resources, 'engine/oneyes/web/about-panel.js'));
+await access(path.join(resources, 'engine/oneyes/locales/zh/main.json'));
+await access(path.join(resources, 'engine/oneyes/locales/zh/nodeDefs.json'));
 const python = await bundledPython(resources);
 const result = JSON.parse(execFileSync(python, ['-I', '-B', '-c', 'import sys,json,torch,torchvision,aiohttp,cryptography,comfyui_frontend_package; from backports import zstd; assert zstd.decompress(zstd.compress(b"native SPZ")) == b"native SPZ"; print(json.dumps({"prefix":sys.prefix,"torch":torch.__file__,"tensor":int(torch.ones(2).sum().item())}))'], { encoding: 'utf8', windowsHide: true }));
 const site = path.dirname(path.dirname(result.torch));

@@ -6,6 +6,7 @@ import path from 'node:path';
 const require = createRequire(import.meta.url);
 const electron = require('electron');
 const env = { ...process.env };
+if (process.argv.includes('--legacy-english')) env.COMFY_TEST_LEGACY_ENGLISH = '1';
 delete env.ELECTRON_RUN_AS_NODE;
 const directory = await mkdtemp(path.join(tmpdir(), 'comfy-ui-result-'));
 env.COMFY_ACCOUNT_TEST_RESULT = path.join(directory, 'result');

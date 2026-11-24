@@ -59,6 +59,7 @@ function createRuntime({ resources, directory, changed = () => {} }) {
             await fs.mkdir(extension, { recursive: true });
             await fs.copyFile(path.join(engine, 'oneyes/custom_node.py'), path.join(extension, '__init__.py'));
             await fs.cp(path.join(engine, 'oneyes/web'), path.join(extension, 'web'), { recursive: true, force: true });
+            await fs.cp(path.join(engine, 'oneyes/locales'), path.join(extension, 'locales'), { recursive: true, force: true });
             const port = await availablePort(), url = `http://127.0.0.1:${port}`;
             if (stopping) return state;
             emit({ status: 'starting', phase: '启动 ComfyUI', message: '正在加载节点与画布', url });
