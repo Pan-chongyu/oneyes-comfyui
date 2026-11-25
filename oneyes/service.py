@@ -74,6 +74,16 @@ def public_url(url):
     return url
 
 
+def video_response(value):
+    if not isinstance(value, dict):
+        raise OneYesError("视频任务响应格式无效，请在官网检查原任务")
+    if "code" in value:
+        if value["code"] not in (0, "0") or not isinstance(value.get("data"), dict):
+            raise OneYesError("视频任务响应异常，请在官网检查原任务")
+        return value["data"]
+    return value
+
+
 class OneYesClient:
     def __init__(self, directory=None):
         self.directory = Path(directory or data_directory())
@@ -149,9 +159,12 @@ class OneYesClient:
                         file.write(chunk)
                 temporary.replace(target)
 
-    async def video(self, payload, check_interrupt=lambda: None):
+    async def video(self, payload, check_interrupt=lambda: None, *, endpoint="/videos/generations"):
+        if endpoint not in ("/videos/generations", "/videos"):
+            raise OneYesError("视频请求接口无效")
         key = self.vault.key("video")
-        job_id = hashlib.sha256(("video\0" + hashlib.sha256(key.encode()).hexdigest() + json.dumps(payload, sort_keys=True, separators=(",", ":"))).encode()).hexdigest()
+        kind = "video\0" if endpoint == "/videos/generations" else "video-bridge\0"
+        job_id = hashlib.sha256((kind + hashlib.sha256(key.encode()).hexdigest() + json.dumps(payload, sort_keys=True, separators=(",", ":"))).encode()).hexdigest()
         async with self.locks.setdefault(job_id, asyncio.Lock()):
             path = self.record_path(job_id)
             if path.exists():
@@ -162,8 +175,9 @@ class OneYesClient:
                 record = {"id": job_id, "origin": origin, "kind": "video", "profile": "video", "key_hash": hashlib.sha256(key.encode()).hexdigest(), "status": "submitting", "created": datetime.now(timezone.utc).isoformat(), "model": payload["model"]}
                 write_json(path, record)
                 try:
-                    reply, delay = await self.request(origin, "/videos/generations", key, payload)
-                    remote_id = reply.get("request_id") or reply.get("task_id") or reply.get("id")
+                    reply, delay = await self.request(origin, endpoint, key, payload)
+                    reply = video_response(reply)
+                    remote_id = (reply.get("id") if endpoint == "/videos" else None) or reply.get("request_id") or reply.get("task_id") or reply.get("id")
                     if not isinstance(remote_id, str) or not remote_id:
                         raise OneYesError("没有取得任务回执")
                     record.update(remote_id=remote_id, status="processing", delay=delay)
@@ -188,15 +202,24 @@ class OneYesClient:
                         await asyncio.sleep(record.get("delay", 3))
                         continue
                     raise
+                reply = video_response(reply)
+                returned_id = reply.get("id") or reply.get("task_id")
+                if returned_id and returned_id != record["remote_id"]:
+                    raise OneYesError("原视频任务回执不一致，已停止取回")
                 status = str(reply.get("status", "")).lower()
                 if status in ("failed", "error", "cancelled", "canceled", "expired"):
                     record["status"] = "failed"
                     write_json(path, record)
                     continue
-                url = (reply.get("video") or {}).get("url") or reply.get("video_url")
+                url = (reply.get("video") or {}).get("url") or reply.get("video_url") or reply.get("result_url") or reply.get("url") or (reply.get("content") or {}).get("video_url") or (reply.get("content") or {}).get("url")
                 if url and status in ("", "completed", "complete", "succeeded", "success", "done"):
-                    record.update(status="completed", url=public_url(url))
+                    content_path = "/videos/" + quote(record["remote_id"], safe="") + "/content"
+                    parsed = urlsplit(url)
+                    relay = url == "/v1" + content_path or parsed.scheme == "https" and parsed.netloc in ("oneyes.ai", "api.oneyes.ai") and parsed.path == "/v1" + content_path and not parsed.query and not parsed.fragment
+                    record.update(status="completed", url=content_path if relay else public_url(url))
                     write_json(path, record)
+                elif status in ("completed", "complete", "succeeded", "success", "done"):
+                    raise OneYesError("原视频任务已完成但暂未返回原件地址，请保留参数再次取回")
                 else:
                     await asyncio.sleep(delay)
             folder = self.directory / "results" / job_id
@@ -204,8 +227,36 @@ class OneYesClient:
             target = folder / "video.mp4"
             if not target.exists():
                 check_interrupt()
-                await self.download(record["url"], target)
+                content_path = "/videos/" + quote(record["remote_id"], safe="") + "/content"
+                if record["url"] == content_path:
+                    await self.download_video(record, key, target)
+                else:
+                    await self.download(record["url"], target)
             return target
+
+    async def download_video(self, record, key, target):
+        origin = record["origin"]
+        if origin not in ORIGINS:
+            raise OneYesError("视频取回地址无效")
+        path = "/videos/" + quote(record["remote_id"], safe="") + "/content"
+        timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=60)
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+            async with session.get(origin + path, headers={"Authorization": f"Bearer {key}"}, allow_redirects=False) as response:
+                if response.status in (301, 302, 303, 307, 308):
+                    location = public_url(response.headers.get("Location", ""))
+                elif response.status == 200:
+                    if not response.headers.get("Content-Type", "").lower().startswith(("video/", "application/octet-stream")):
+                        raise OneYesError("视频原件暂未就绪，请保留参数再次取回原任务")
+                    temporary = target.with_suffix(".part")
+                    with temporary.open("wb") as file:
+                        async for chunk in response.content.iter_chunked(1024 * 1024):
+                            file.write(chunk)
+                    temporary.replace(target)
+                    return
+                else:
+                    raise OneYesError("视频原件暂时无法下载，请保留参数再次取回原任务", response.status)
+        # Media redirects never receive the account's API Key.
+        await self.download(location, target)
 
     def record_path(self, job_id):
         if not re.fullmatch(r"[a-f0-9]{64}", job_id):

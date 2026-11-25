@@ -27,7 +27,7 @@ Image.new('RGB', (17, 23), 'blue').save(buffer, 'PNG')
 async def request(origin, path, key, payload=None, multipart=None):
     if path == '/models':
         assert payload is None and multipart is None
-        return {'data': [{'id':'gpt-6.2-sol'}, {'id':'gpt-image-2.5'}, {'id':'claude-opus-4-6'}]}, 1
+        return {'data': [{'id':model} for model in ['gpt-6.2-sol','gpt-image-2.5','claude-opus-4-6','doubao-seedance-2.0','doubao-seedance-2.5','doubao-seedance-2.0 [480p-4k 4-15s ¥13.2/百万Token起]']]}, 1
     assert key == 'sk-image-test-secret'
     if path.endswith('/async'):
         assert payload['model'] == 'gpt-image-2.5'
@@ -344,6 +344,37 @@ app.on('browser-window-created', (_event, window) => {
             await js(`[...document.querySelectorAll('.oneyes-models button')].find(b=>b.textContent==='gpt-image-2.5').click()`);
             await waitFor(window, `window.nativeImageNode.widgets.find(w=>w.name==='model')?.value==='gpt-image-2.5' && window.nativeImageNode.widgets.some(w=>w.name==='model.quality')`);
             assert.equal(await js(`window.nativeImageNode.serialize().type`), 'OpenAIGPTImageNodeV2');
+            const frames = await js(`(async()=>{
+                const app=window.comfyAPI.app.app;
+                app.graph.clear();
+                const first=LiteGraph.createNode('LoadImage'),last=LiteGraph.createNode('LoadImage'),video=LiteGraph.createNode('ByteDanceFirstLastFrameNode'),save=LiteGraph.createNode('SaveVideo');
+                for(const node of [first,last,video,save])app.graph.add(node);
+                video.widgets.find(w=>w.name==='model').value='seedance-1-5-pro-251215';
+                video.widgets.find(w=>w.name==='prompt').value='保留首尾帧原工作流';
+                video.widgets.find(w=>w.name==='duration').value=5;
+                first.connect(0,video,video.inputs.findIndex(i=>i.name==='first_frame'));
+                last.connect(0,video,video.inputs.findIndex(i=>i.name==='last_frame'));
+                video.connect(0,save,save.inputs.findIndex(i=>i.name==='video'));
+                await app.loadGraphData(app.graph.serialize());
+                const restored=app.graph._nodes.find(n=>n.type==='ByteDanceFirstLastFrameNode');
+                window.nativeFramesNode=restored;
+                return {model:restored.widgets.find(w=>w.name==='model').value,prompt:restored.widgets.find(w=>w.name==='prompt').value,duration:restored.widgets.find(w=>w.name==='duration').value,title:restored.title,inputs:restored.inputs.filter(i=>i.name==='first_frame'||i.name==='last_frame').map(i=>({name:i.name,type:i.type,connected:i.link!==null})),output:restored.outputs[0].type,links:app.graph.links.size,widgets:restored.widgets.map(w=>w.name)};
+            })()`);
+            assert.equal(frames.model, 'seedance-1-5-pro-251215', 'Import must preserve saved models rather than choose another billing model');
+            assert.equal(frames.prompt, '保留首尾帧原工作流');
+            assert.equal(frames.duration, 5);
+            assert.equal(frames.title, '字节跳动首尾帧转视频');
+            assert.deepEqual(frames.inputs, [{name:'first_frame',type:'IMAGE',connected:true},{name:'last_frame',type:'IMAGE',connected:true}]);
+            assert.equal(frames.output, 'VIDEO'); assert.equal(frames.links, 3);
+            assert.ok(frames.widgets.includes('选择 OneYes 模型'));
+            await js(`window.nativeFramesNode.widgets.find(w=>w.name==='选择 OneYes 模型').callback()`);
+            await waitFor(window, `Boolean([...document.querySelectorAll('.oneyes-models button')].find(b=>b.textContent==='doubao-seedance-2.5'))`);
+            assert.deepEqual(await js(`[...document.querySelectorAll('.oneyes-models button')].map(b=>b.textContent)`), ['doubao-seedance-2.0', 'doubao-seedance-2.0 [480p-4k 4-15s ¥13.2/百万Token起]', 'doubao-seedance-2.5']);
+            await js(`[...document.querySelectorAll('.oneyes-models button')].find(b=>b.textContent==='doubao-seedance-2.5').click()`);
+            assert.equal(await js(`window.nativeFramesNode.widgets.find(w=>w.name==='model').value`), 'doubao-seedance-2.5');
+            assert.equal(await js(`window.comfyAPI.app.app.graph.links.size`), 3, 'Selecting a usable model must preserve both image and video connections');
+            assert.doesNotMatch(await js(`JSON.stringify(window.nativeFramesNode.serialize())`), /test-secret/);
+            console.log('ByteDance workflow: original node and frame/video links restored, saved model retained, exact OneYes model selection passed.');
             const imported = await js(`(async()=>{
                 const app=window.comfyAPI.app.app;
                 app.graph.clear();

@@ -45,3 +45,9 @@ Windows 安装器在安装及静默 OTA 更新后发送 Shell 图标刷新通知
 从 0.1.24 起，完整包、bsdiff 补丁及 blockmap 差异区间统一使用有界 Range 分块：每块最多 8 MiB，先完成一个网络块确认 Range／ETag，再最多同时处理三块。无需在发布端增加重复的分块文件，八种已签名 OTA 格式直接使用原始安装包与 blockmap。下载按独立偏移写入同一临时文件，每个网络块完成或退出时先同步数据，再原子保存各块偏移；重启时按收据恢复，不能用稀疏文件长度判断已下载。旧版连续 `.part` 缓存迁移为各块进度。当前任务中任一块失败会取消同组请求并保留进度，沿用现有用户重试／定期检查，不新增自动重试规则；408／429／5xx 不降级成完整下载。不支持 Range、Content-Range 或 ETag 不一致时降级为串行兼容下载，仍保留断点续传。
 
 “关于”保留原下载量和复用量，增加已完成／总分块数；下载完成和执行安装前继续验证完整安装包 SHA-256，签名公钥不变，损坏文件不可安装。旧缓存仍随原版本目录清理。发布必须通过真实 HTTP 乱序并发、独立偏移重启恢复、旧缓存迁移、取消、Range 降级、临时故障及完整性测试，并在四个平台通过 Electron `net.fetch` 的实际并行 Range 下载及更新界面验证后生成签名 OTA。
+
+从 0.1.25 起，OneYes 扩展注册原版 `ByteDanceFirstLastFrameNode`，保留节点 ID、输入顺序、可选参数、VIDEO 输出和模板连线；不启用原 Comfy Org 付费代理。新节点可选择 OneYes Video Key 返回的精确 `doubao-seedance-*` ID（含价格别名），旧模板保存的 `seedance-1-*` 保留但不自动映射到其他计费模型，运行前给出选择可用模型的操作提示。原图无损编码且不缩放，水印／音频使用 JSON 布尔值；固定镜头按原节点说明改为提示词指令，避免发送上游不支持的 camera_fixed 字段。接入使用 OneYes `/v1/videos`，既有 Grok 原生任务及去重身份保持兼容。
+
+视频接口支持平面与 code/data 回执、公开结果 URL 及本站 `/v1/videos/{id}/content` 鉴权下载；凭据只发送到固定 OneYes 站点的原任务地址，媒体重定向不携带 Key。下载失败保留完成回执，重启后取回原任务；未知提交不自动重发，回执 ID 不一致立即停止，没有结果地址时给出可重试提示，避免无限等待。发布测试包括中文原工作流导入／模型手动切换、原图尺寸及布尔参数、实际视频解码并保存、完成任务重启恢复，以及鉴权与重定向边界。四个平台打包前及打包后都必须通过真实引擎测试，再发布签名和分块 OTA。
+
+本次适配所依据的接口合同：原版节点 `comfy_api_nodes/nodes_bytedance.py`、[官方节点文档](https://docs.comfy.org/built-in-nodes/ByteDanceFirstLastFrameNode)、[Seedance 接口规范](https://88api.ai/zh/docs/api/video/seedance-multi-resolution/)与现有 OneYes 统一视频请求适配。实机只读核对 Video Key 模型目录；执行回归使用隔离测试传输，不将其描述为真实付费生成验证。

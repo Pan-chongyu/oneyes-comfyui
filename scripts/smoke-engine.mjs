@@ -43,7 +43,8 @@ NODE_CLASS_MAPPINGS = {}
 await writeFile(path.join(fixture, 'native_cloud.py'), await readFile('test-desktop/fixtures/native-cloud.py'));
 await writeFile(path.join(fixture, 'builtin_nodes.py'), await readFile('test-desktop/fixtures/builtin-nodes.py'));
 await writeFile(path.join(fixture, 'elevenlabs.py'), await readFile('test-desktop/fixtures/elevenlabs.py'));
-await writeFile(path.join(fixture, '__init__.py'), (await readFile(path.join(fixture, '__init__.py'), 'utf8')) + '\nfrom . import native_cloud, builtin_nodes, elevenlabs\n');
+await writeFile(path.join(fixture, 'bytedance.py'), await readFile('test-desktop/fixtures/bytedance.py'));
+await writeFile(path.join(fixture, '__init__.py'), (await readFile(path.join(fixture, '__init__.py'), 'utf8')) + '\nfrom . import native_cloud, builtin_nodes, elevenlabs, bytedance\n');
 const runtime = createRuntime({ resources, directory, changed: state => console.log(JSON.stringify({ status: state.status, phase: state.phase, message: state.message })) });
 try {
     if (!packaged) for (const name of ['python', 'engine', 'frontend']) { await rename(path.join(originalResources, name), path.join(resources, name)); moved.push(name); }
@@ -65,7 +66,7 @@ try {
     assert.match(await fetch(origin + '/oneyes-native.js').then(r => r.text()), /useSettingsDialog/);
     assert.equal((await fetch(origin + '/extensions/oneyes/account-panel.html')).status, 200);
     const nodes = await fetch(origin + '/object_info').then(r => r.json());
-    for (const name of ['OneYesImage', 'OneYesImageEdit', 'OneYesRecoverImage', 'OneYesText', 'KSampler', 'SaveImage', 'LoadImage', 'ElevenLabsVoiceSelector', 'ElevenLabsTextToSpeech', 'ElevenLabsInstantVoiceClone']) assert.ok(nodes[name], `Missing actual ComfyUI node ${name}`);
+    for (const name of ['OneYesImage', 'OneYesImageEdit', 'OneYesRecoverImage', 'OneYesText', 'KSampler', 'SaveImage', 'LoadImage', 'ByteDanceFirstLastFrameNode', 'ElevenLabsVoiceSelector', 'ElevenLabsTextToSpeech', 'ElevenLabsInstantVoiceClone']) assert.ok(nodes[name], `Missing actual ComfyUI node ${name}`);
     const denied = await fetch(origin + '/oneyes/settings'); assert.equal(denied.status, 403);
     const headers = { 'X-OneYes-Session': runtime.token() };
     const status = await fetch(origin + '/oneyes/settings', { headers }).then(r => r.json()); assert.equal(status.configured.default, false);
@@ -101,7 +102,12 @@ try {
     const native = await fetch(origin + '/oneyes-test/native');
     const verification = await native.text();
     assert.equal(native.status, 200, verification);
-    assert.equal(JSON.parse(verification).nativeNodes, 19);
+    assert.equal(JSON.parse(verification).nativeNodes, 20);
+    const bytedance = await fetch(origin + '/oneyes-test/bytedance');
+    const bytedanceVerification = await bytedance.text();
+    assert.equal(bytedance.status, 200, bytedanceVerification);
+    const bytedanceContracts = JSON.parse(bytedanceVerification);
+    assert.equal(bytedanceContracts.noResubmission, true);
     const builtins = await fetch(origin + '/oneyes-test/builtins');
     const builtinVerification = await builtins.text();
     assert.equal(builtins.status, 200, builtinVerification);
@@ -112,9 +118,9 @@ try {
     assert.equal(elevenlabs.status, 200, elevenlabsVerification);
     const elevenlabsContracts = JSON.parse(elevenlabsVerification);
     assert.equal(elevenlabsContracts.registered.length, 8);
-    console.log(JSON.stringify({ engine: 'ComfyUI', oneYesNodes: 23, elevenlabsContracts, nativeContracts: JSON.parse(verification), builtinContracts, oneYesGraphs: 'success with test-only transport; no paid requests', localGraph: 'success', localAuth: 'verified', native: process.platform + '-' + process.arch }));
+    console.log(JSON.stringify({ engine: 'ComfyUI', oneYesNodes: 24, elevenlabsContracts, bytedanceContracts, nativeContracts: JSON.parse(verification), builtinContracts, oneYesGraphs: 'success with test-only transport; no paid requests', localGraph: 'success', localAuth: 'verified', native: process.platform + '-' + process.arch }));
     assert.ok(!(await readdir(directory)).some(name => ['runtime', 'python', 'uv-cache'].includes(name)), 'Fresh launch must not create/download a Python environment');
-    await writeFile(path.resolve('desktop-smoke-result.json'), JSON.stringify({ nodes: 23, elevenlabsContracts, nativeContracts: JSON.parse(verification), builtinContracts, oneYesGraphs: 'success', localGraph: 'success', relocatedOfflineRuntime: true, platform: process.platform, arch: process.arch }));
+    await writeFile(path.resolve('desktop-smoke-result.json'), JSON.stringify({ nodes: 24, elevenlabsContracts, bytedanceContracts, nativeContracts: JSON.parse(verification), builtinContracts, oneYesGraphs: 'success', localGraph: 'success', relocatedOfflineRuntime: true, platform: process.platform, arch: process.arch }));
 } catch (error) {
     try { console.error(await readFile(path.join(directory, 'engine-error.log'), 'utf8')); } catch {}
     throw error;

@@ -13,7 +13,7 @@ import torch
 import comfy.model_management
 import folder_paths
 from comfy_api.latest import io, InputImpl
-from comfy_api_nodes import nodes_openai as openai, nodes_anthropic as anthropic, nodes_gemini as gemini, nodes_grok as grok
+from comfy_api_nodes import nodes_openai as openai, nodes_anthropic as anthropic, nodes_gemini as gemini, nodes_grok as grok, nodes_bytedance as bytedance
 from comfy_api_nodes.apis.gemini import GeminiGenerateContentResponse
 
 from .routes import client
@@ -423,6 +423,43 @@ class GrokVideo(NativeNode, grok.GrokVideoNode):
         return io.NodeOutput(InputImpl.VideoFromFile(str(path)))
 
 
+class ByteDanceFirstLastFrame(NativeNode, bytedance.ByteDanceFirstLastFrameNode):
+    profile = "video"
+    model_prefixes = ("doubao-seedance-",)
+
+    @classmethod
+    def define_schema(cls):
+        schema = super().define_schema()
+        schema.description = "使用 OneYes Video 分组生成首尾帧视频，原节点 ID、参数与连线保持兼容。旧模板的 seedance-1-* 不自动换成其他计费模型；请点击“选择 OneYes 模型”选择当前 Key 可用的 doubao-seedance 模型。原图不缩放，任务回执保存在本机，保留参数重新运行可取回原视频。"
+        model = next(item for item in schema.inputs if item.id == "model")
+        models = [value for value in client.cached_models(cls.profile) if cls.supports_model(value)]
+        model.options = list(dict.fromkeys([*model.options, "doubao-seedance-2.0"]))
+        model.default = models[0] if models else "doubao-seedance-2.0"
+        for item in schema.inputs:
+            if item.id == "camera_fixed":
+                item.tooltip = "通过提示词要求镜头固定；当前模型不接受独立 camera_fixed 参数，实际效果由模型决定。"
+        return schema
+
+    @classmethod
+    async def execute(cls, model, prompt, first_frame, last_frame, resolution, aspect_ratio, duration, seed=0, camera_fixed=False, watermark=False, generate_audio=False):
+        if not cls.supports_model(model) or model not in (await client.connection("video"))["models"]:
+            raise OneYesError("当前 OneYes Video Key 未提供此首尾帧模型，请点击节点的“选择 OneYes 模型”选择可用的 doubao-seedance 模型；原设置已保留，未提交生成")
+        frames = []
+        for label, tensor in (("首帧", first_frame), ("尾帧", last_frame)):
+            files = references(tensor)
+            if len(files) != 1:
+                raise OneYesError(f"{label}需要一张图片，请从图片批次中选择对应的一帧；未提交生成")
+            frames.append("data:image/png;base64," + base64.b64encode(files[0]).decode())
+        payload = {
+            "model": model, "prompt": prompt + ("\n镜头固定，保持机位不移动。" if camera_fixed else ""),
+            "first_frame": frames[0], "last_frame": frames[1], "resolution": resolution,
+            "ratio": aspect_ratio, "duration": duration, "seed": seed,
+            "watermark": watermark, "generate_audio": generate_audio,
+        }
+        path = await client.video(payload, interrupt, endpoint="/videos")
+        return io.NodeOutput(InputImpl.VideoFromFile(str(path)))
+
+
 def input_file(file, suffixes):
     root = Path(folder_paths.get_input_directory()).resolve()
     path = Path(folder_paths.get_annotated_filepath(file)).resolve()
@@ -443,4 +480,4 @@ class GeminiFiles(gemini.GeminiInputFiles):
         return io.NodeOutput([cls.create_file_part(input_file(file, (".txt", ".pdf"))), *(GEMINI_INPUT_FILES or [])])
 
 
-NATIVE_NODES = [GPTImage, GPTImageV2, GPTImageV3, ChatGPT, OpenAIFiles, openai.OpenAIChatConfig, Claude, GeminiText, GeminiTextV2, GeminiTextV3, GeminiFiles, GeminiImage, GeminiImage2, NanoBanana, NanoBananaV2, GrokImage, GrokImageEdit, GrokImageEditV2, GrokVideo]
+NATIVE_NODES = [GPTImage, GPTImageV2, GPTImageV3, ChatGPT, OpenAIFiles, openai.OpenAIChatConfig, Claude, GeminiText, GeminiTextV2, GeminiTextV3, GeminiFiles, GeminiImage, GeminiImage2, NanoBanana, NanoBananaV2, GrokImage, GrokImageEdit, GrokImageEditV2, GrokVideo, ByteDanceFirstLastFrame]

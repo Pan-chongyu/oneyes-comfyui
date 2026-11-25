@@ -21,6 +21,12 @@
     "inputs": { "model": { "name": "模型" }, "prompt": { "name": "提示词" }, "system": { "name": "系统提示词" }, "temperature": { "name": "温度" } },
     "outputs": { "0": { "name": "文本" } }
   },
+  "ByteDanceFirstLastFrameNode": {
+    "display_name": "字节跳动首尾帧转视频",
+    "description": "通过 OneYes Video 分组使用首尾帧生成视频。旧模板的模型不会被自动替换，请选择当前 Key 可用的 doubao-seedance 模型。保持原参数重新运行可取回原任务。",
+    "inputs": { "first_frame": { "name": "首帧图片" }, "last_frame": { "name": "尾帧图片" }, "model": { "name": "模型" }, "prompt": { "name": "提示词" }, "resolution": { "name": "分辨率" }, "aspect_ratio": { "name": "画面比例" }, "duration": { "name": "时长（秒）" }, "seed": { "name": "种子" }, "camera_fixed": { "name": "固定镜头", "tooltip": "通过提示词要求镜头固定，实际效果由模型决定。" }, "watermark": { "name": "添加水印" }, "generate_audio": { "name": "生成音频" } },
+    "outputs": { "0": { "name": "视频" } }
+  },
   "OpenAIGPTImage1": {
     "display_name": "OpenAI GPT 图像生成",
     "description": "通过 OneYes 异步生成或编辑图片，任务回执保存在本机，可在重启后继续取回。",
