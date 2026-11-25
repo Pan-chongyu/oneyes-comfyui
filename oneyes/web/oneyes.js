@@ -109,6 +109,7 @@ app.registerExtension({
     nodeCreated(node) {
         if (nativeNodes[node.comfyClass]?.unavailable) {
             node.addWidget("button", "OneYes 暂未接入 · 查看原因", null, () => {
+                if (window.oneYesDesktop) return window.oneYesDesktop.confirm({ type: 'info', title: 'ElevenLabs 接口暂不可用', message: nativeNodes[node.comfyClass].unavailable, itemList: [], confirmLabel: '知道了', cancelLabel: '关闭' });
                 const panel = dialog("ElevenLabs 接口暂不可用");
                 panel.classList.add('oneyes-unavailable');
                 const message = document.createElement("p");

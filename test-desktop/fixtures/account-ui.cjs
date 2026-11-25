@@ -141,6 +141,7 @@ app.on('browser-window-created', (_event, window) => {
             assert.doesNotMatch(await js(`document.body.textContent`), /Unsaved Workflow|Untitled|g\.untitled/);
             assert.deepEqual(Menu.getApplicationMenu().items.slice(1).map(item => item.label), ['编辑', '视图', '窗口']);
             assert.equal(Menu.getApplicationMenu().items[1].submenu.items.find(item => item.role === 'copy').label, '复制');
+            await require('./native-ui.cjs')({ window, directory, js, waitFor });
             assert.equal(BrowserWindow.getAllWindows().length, 1, 'Startup must open only the canvas window');
             assert.equal(await js(`Boolean(document.querySelector('[data-testid="settings-dialog"]'))`), false, 'Startup must not require a settings screen');
             assert.deepEqual((await js(`window.oneYesDesktop.state()`)).configured, { default: false, image: false, text: false, claude: false, gemini: false, grok: false, video: false });
@@ -179,7 +180,7 @@ app.on('browser-window-created', (_event, window) => {
             assert.equal(await js(`document.querySelector('#account-text').value`), '9');
             await waitFor(window, `document.querySelector('[data-testid="oneyes-account-button"]').dataset.connection==='connected'`);
             assert.match(await js(`document.querySelector('[data-testid="oneyes-account-button"]').title`), /OneYes · 创作者 · 余额 \$12.34/);
-            const avatarReady = `(()=>{const panel=document.querySelector('#account-avatar'),button=document.querySelector('.oneyes-account-avatar img');return panel&&!panel.hidden&&panel.naturalWidth>0&&button?.dataset.loaded==='true'&&button.naturalWidth>0})()`;
+            const avatarReady = `(()=>{const panel=document.querySelector('#account-avatar'),button=document.querySelector('.oneyes-account-avatar img');return panel&&!panel.hidden&&panel.naturalWidth>0&&button?.dataset.loaded==='true'&&button.naturalWidth>0&&!document.querySelector('#refresh-account').disabled})()`;
             await waitFor(window, avatarReady);
             assert.equal(await js(`getComputedStyle(document.querySelector('.oneyes-account-avatar>i')).visibility`), 'hidden', 'Transparent avatars must not show the fallback glyph underneath');
             assert.deepEqual(await js(`['#account-avatar','.oneyes-account-avatar img'].map(selector=>{const image=document.querySelector(selector);return {fit:getComputedStyle(image).objectFit,round:getComputedStyle(image.parentElement).borderRadius}})`), [{ fit: 'cover', round: '50%' }, { fit: 'cover', round: '50%' }], 'Both account surfaces must crop rectangular avatars consistently');
@@ -218,7 +219,17 @@ app.on('browser-window-created', (_event, window) => {
             assert.equal(narrow.columns.trim().split(/\s+/).length, 1, 'Key fields should stack based on panel width');
             if (process.env.COMFY_UI_SCREENSHOT) fs.writeFileSync(process.env.COMFY_UI_SCREENSHOT.replace(/\.png$/, '-narrow.png'), (await window.webContents.capturePage()).toPNG());
             window.setContentSize(1440, 960);
-            await js(`window.confirm=()=>true;document.querySelector('#logout-account').click()`);
+            const originalMessageBox = dialog.showMessageBox;
+            let logoutResponse = 0;
+            dialog.showMessageBox = async (parent, options) => {
+                assert.equal(parent, window); assert.deepEqual(options.buttons, ['取消', '退出登录']);
+                return { response: logoutResponse, checkboxChecked: false };
+            };
+            await js(`document.querySelector('#logout-account').click()`);
+            await waitFor(window, `!document.querySelector('#logout-account').disabled`);
+            assert.equal((await js(`window.oneYesDesktop.state()`)).account.connected, true, 'Cancelling native logout must preserve the account and keys');
+            logoutResponse = 1;
+            await js(`document.querySelector('#logout-account').click()`);
             await waitFor(window, `!document.querySelector('#account-entry').hidden && !document.querySelector('#reuse-account').disabled`);
             await waitFor(window, `!document.querySelector('.oneyes-account-avatar img') && !document.querySelector('#account-avatar').hasAttribute('src')`);
             await js(`document.querySelector('#website-login').click()`);
@@ -240,6 +251,7 @@ app.on('browser-window-created', (_event, window) => {
             assert.doesNotMatch(JSON.stringify(await js(`window.oneYesDesktop.state()`)), /website-access-test-secret|website-refresh-test-secret/);
             await js(`document.querySelector('#logout-account').click()`);
             await waitFor(window, `!document.querySelector('#account-entry').hidden && !document.querySelector('#reuse-account').disabled`);
+            dialog.showMessageBox = originalMessageBox;
             shared = true;
             await js(`document.querySelector('#reuse-account').click()`);
             await waitFor(window, `document.querySelector('#account-source').textContent==='已复用客户端登录' && !document.querySelector('#refresh-account').disabled`);
@@ -351,14 +363,18 @@ app.on('browser-window-created', (_event, window) => {
             assert.equal(imported.connected, true, 'Original ElevenLabs voice connection must survive workflow import');
             assert.ok(imported.widgets.includes('OneYes 暂未接入 · 查看原因'));
             assert.ok(!imported.widgets.includes('选择 OneYes 模型'), 'Unavailable APIs must not look like usable model integrations');
+            const originalInfoBox = dialog.showMessageBox;
+            let unavailableInfo;
+            dialog.showMessageBox = async (parent, options) => { assert.equal(parent, window); unavailableInfo = options; return { response: 0, checkboxChecked: false }; };
             await js(`window.elevenlabsTts.widgets.find(w=>w.name==='OneYes 暂未接入 · 查看原因').callback()`);
-            await waitFor(window, `Boolean(document.querySelector('.oneyes-unavailable[open]'))`);
-            assert.match(await js(`document.querySelector('.oneyes-unavailable').textContent`), /OneYes 当前尚未接入 ElevenLabs/);
-            await js(`document.querySelector('.oneyes-unavailable .oneyes-close').click()`);
+            assert.match(unavailableInfo.message, /OneYes 当前尚未接入 ElevenLabs/);
+            dialog.showMessageBox = originalInfoBox;
             // Account IPC is restricted even when called from another main frame.
             const untrusted = new BrowserWindow({ show: false, webPreferences: { preload: path.resolve('desktop/preload.cjs'), sandbox: true, contextIsolation: true } });
             await untrusted.loadURL('about:blank');
             assert.match(await untrusted.webContents.executeJavaScript(`window.oneYesDesktop.account('reuse').then(()=>'',error=>error.message)`), /请求来源无效/);
+            assert.match(await untrusted.webContents.executeJavaScript(`window.oneYesDesktop.copyText('untrusted').then(()=>'',error=>error.message)`), /请求来源无效/);
+            assert.match(await untrusted.webContents.executeJavaScript(`window.oneYesDesktop.confirm({}).then(()=>'',error=>error.message)`), /请求来源无效/);
             untrusted.destroy();
             assert.deepEqual(rendererErrors, [], 'Native OneYes integration must load without renderer errors');
             console.log('Native ComfyUI: standalone GPT workflow, direct login + 2FA, isolated website login, encrypted keys, optional desktop reuse, identity change, native settings and IPC authorization passed.');

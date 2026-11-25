@@ -31,6 +31,7 @@ assert.equal(frontend.nativeUserPanel, true);
 assert.equal(frontend.oneYesAccountButton, true);
 assert.match(await readFile(path.join(resources, 'frontend/assets', frontend.authModule), 'utf8'), /openSettings\('account'\)/);
 await access(path.join(resources, 'frontend/oneyes-account-button.js'));
+await access(path.join(resources, 'frontend/oneyes-native-dialogs.js'));
 assert.match(await readFile(path.join(resources, 'frontend/assets', frontend.userPanel), 'utf8'), /mountAccountPanel/);
 assert.match(await readFile(path.join(resources, 'frontend/assets', frontend.aboutPanel), 'utf8'), /mountAboutPanel/);
 await access(path.join(resources, 'engine/oneyes/web/account-panel.html'));

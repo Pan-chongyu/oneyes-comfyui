@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld('oneYesDesktop', {
         return () => { if (openSettings === callback) openSettings = undefined; };
     },
     openData: () => ipcRenderer.invoke('oneyes:data'),
+    confirm: options => ipcRenderer.invoke('oneyes:native-confirm', options),
+    copyText: value => ipcRenderer.invoke('oneyes:copy-text', value),
     openKeys: () => ipcRenderer.invoke('oneyes:keys'),
     openAccountPage: page => ipcRenderer.invoke('oneyes:account-page', page),
     models: profile => ipcRenderer.invoke('oneyes:models', profile),

@@ -49,6 +49,13 @@ await writeFile(htmlFile, html.replace('<html lang="en">', '<html lang="zh-CN">'
 const vueSource = await readFile(path.join(assets, vue), 'utf8'), dialogSource = await readFile(path.join(assets, dialog), 'utf8');
 const h = vueSource.match(/\bh as (\w+)/)?.[1], nextTick = vueSource.match(/\bnextTick as (\w+)/)?.[1], settings = dialogSource.match(/\buseSettingsDialog as (\w+)/)?.[1];
 assert.ok(h && nextTick && settings, 'Pinned frontend exports have changed');
+const confirmation = dialogSource.match(/async function confirm\(\{[^}]+\}\)\{let show=(\w+)=>\{let (\w+)=\{[\s\S]*?\};(\w+)\.showDialog\(\2\)\}/);
+assert.ok(confirmation, 'Review the native confirmation adapter before upgrading the frontend');
+await cp(path.join(root, 'desktop/frontend-src/native-dialogs.js'), path.join(destination, 'oneyes-native-dialogs.js'));
+const [, resolveConfirmation, confirmationProps, dialogStore] = confirmation;
+const showConfirmation = `${dialogStore}.showDialog(${confirmationProps})`;
+const nativeConfirmation = `oneYesCanConfirm({title:${confirmationProps}.title,...${confirmationProps}.props})?void oneYesConfirm({title:${confirmationProps}.title,...${confirmationProps}.props},oneYesTranslate).then(${resolveConfirmation},()=>${resolveConfirmation}(null)):${showConfirmation}`;
+await writeFile(path.join(assets, dialog), `import {confirmNative as oneYesConfirm,supportsNativeConfirmation as oneYesCanConfirm} from '/oneyes-native-dialogs.js';\nimport {d as oneYesTranslate} from './${locale}';\n` + dialogSource.replace(confirmation[0], confirmation[0].replace(showConfirmation, nativeConfirmation)));
 await writeFile(path.join(assets, user[0]), `import {${h} as h} from './${vue}';
 export default {
     name: 'OneYesUserPanel',

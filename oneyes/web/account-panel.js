@@ -164,7 +164,8 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
     $('website-login').onclick = () => void runAccount(async () => { const account = await bridge.account('website-login'); render({ ...current, account }); message(account.error || '已独立登录并配置可用 Key，可以开始创作。'); });
     $('reconnect-account').onclick = $('reuse-account').onclick;
     $('logout-account').onclick = () => void runAccount(async () => {
-        if (!window.confirm('退出本软件并清除从该账号导入的 Key？不会退出 OneYes 客户端。原图片任务取回仍需要原 Key。')) return;
+        const answer = await bridge.confirm({ type: 'default', title: '退出 OneYes 登录', message: '退出本软件并清除从该账号导入的 Key？', hint: '不会退出 OneYes 客户端。原图片任务取回仍需要原 Key。', itemList: [], confirmLabel: '退出登录', cancelLabel: '取消' });
+        if (answer.value !== true) return;
         await bridge.account('logout'); message('已退出本软件，手动填写的 Key 保持不变。');
     });
     $('cancel-totp').onclick = () => void runAccount(async () => { await bridge.account('logout'); $('login-code').value = ''; });
@@ -201,7 +202,7 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
         $('model-list').replaceChildren();
         const values = modelValues.filter(value => value.toLowerCase().includes($('model-search').value.toLowerCase()));
         if (!values.length) $('model-list').textContent = '没有匹配的模型，请检查 Key 分组或搜索条件。';
-        for (const model of values) { const button = document.createElement('button'); button.textContent = model; button.onclick = async () => { await navigator.clipboard.writeText(model); message('已复制模型 ID，可粘贴到节点的模型输入框。'); }; $('model-list').append(button); }
+        for (const model of values) { const button = document.createElement('button'); button.textContent = model; button.onclick = async () => { await bridge.copyText(model); message('已复制模型 ID，可粘贴到节点的模型输入框。'); }; $('model-list').append(button); }
     }
     action('refresh-models', async () => { const data = await bridge.models($('model-profile').value); modelValues = data.models; renderModels(); message(`已读取 ${modelValues.length} 个模型`); });
     $('model-search').oninput = renderModels;
@@ -213,7 +214,7 @@ export async function mountAccountPanel(root, bridge = window.oneYesDesktop) {
             const row = document.createElement('div'); row.className = 'task-item';
             const title = document.createElement('strong'); title.textContent = `${task.model} · ${labels[task.status] || task.status}`;
             const details = document.createElement('p'); details.textContent = `${new Date(task.created).toLocaleString()}　${task.remote_id || '未收到服务端回执，请先在官网核对'} `;
-            const copy = document.createElement('button'); copy.className='quiet'; copy.textContent='复制本地任务编号'; copy.onclick=async () => { await navigator.clipboard.writeText(task.id); message(task.kind === 'video' ? '已复制。视频请保持原参数和种子，重新运行原视频节点取回，不会重复生成。' : '已复制，粘贴到“取回原图片任务”节点即可。'); };
+            const copy = document.createElement('button'); copy.className='quiet'; copy.textContent='复制本地任务编号'; copy.onclick=async () => { await bridge.copyText(task.id); message(task.kind === 'video' ? '已复制。视频请保持原参数和种子，重新运行原视频节点取回，不会重复生成。' : '已复制，粘贴到“取回原图片任务”节点即可。'); };
             row.append(title, details, copy); $('task-list').append(row);
         }
     });
