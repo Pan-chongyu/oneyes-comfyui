@@ -142,6 +142,7 @@ app.on('browser-window-created', (_event, window) => {
             assert.deepEqual(Menu.getApplicationMenu().items.slice(1).map(item => item.label), ['编辑', '视图', '窗口']);
             assert.equal(Menu.getApplicationMenu().items[1].submenu.items.find(item => item.role === 'copy').label, '复制');
             await require('./native-ui.cjs')({ window, directory, js, waitFor });
+            await require('./update-download.cjs')(directory);
             assert.equal(BrowserWindow.getAllWindows().length, 1, 'Startup must open only the canvas window');
             assert.equal(await js(`Boolean(document.querySelector('[data-testid="settings-dialog"]'))`), false, 'Startup must not require a settings screen');
             assert.deepEqual((await js(`window.oneYesDesktop.state()`)).configured, { default: false, image: false, text: false, claude: false, gemini: false, grok: false, video: false });
@@ -292,9 +293,9 @@ app.on('browser-window-created', (_event, window) => {
             await js(`document.querySelector('#check-update').click()`);
             await waitFor(window, `document.querySelector('#update-label').textContent==='正在检查更新…' && document.querySelector('#check-update').disabled`);
             assert.equal(checkCalls, 1);
-            pushUpdate({ status: 'downloading', version: '9.9.9', progress: 42, mode: 'delta', total: 104857600, downloaded: 44040192, reused: 943718400 });
+            pushUpdate({ status: 'downloading', version: '9.9.9', progress: 42, mode: 'delta', total: 104857600, downloaded: 44040192, reused: 943718400, chunks: 13, completedChunks: 5 });
             await waitFor(window, `document.querySelector('#update-progress').value===42 && !document.querySelector('#update-progress').hidden`);
-            assert.equal(await js(`document.querySelector('#update-transfer').textContent`), '增量下载 42.0 MB / 100.0 MB · 已复用 900.0 MB');
+            assert.equal(await js(`document.querySelector('#update-transfer').textContent`), '增量下载 42.0 MB / 100.0 MB · 分块 5/13 · 已复用 900.0 MB');
             pushUpdate({ status: 'ready', progress: 100 }); finishUpdateCheck();
             await waitFor(window, `!document.querySelector('#install-update').hidden && !document.querySelector('#install-update').disabled`);
             if (process.env.COMFY_UI_SCREENSHOT) fs.writeFileSync(process.env.COMFY_UI_SCREENSHOT.replace(/\.png$/, '-about.png'), (await window.webContents.capturePage()).toPNG());

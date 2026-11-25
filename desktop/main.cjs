@@ -168,8 +168,7 @@ else {
         if (stopped) return;
         event.preventDefault();
         if (shutdown) return;
-        updater?.close();
-        shutdown = (runtime ? runtime.stop() : Promise.resolve())
+        shutdown = Promise.all([updater?.close(), runtime?.stop()])
             .catch(error => console.error('无法停止 ComfyUI 引擎：', error))
             .finally(() => { stopped = true; tray?.destroy(); app.quit(); });
     });

@@ -21,7 +21,7 @@ export async function mountAboutPanel(root, bridge = window.oneYesDesktop) {
         $('update-progress').value = update.progress;
         const transfer = $('update-transfer'), mib = bytes => `${(bytes / 1048576).toFixed(1)} MB`;
         transfer.hidden = !['downloading', 'ready'].includes(update.status) || !update.total;
-        transfer.textContent = `${update.mode === 'delta' ? '增量下载' : '完整下载'} ${mib(update.downloaded || 0)} / ${mib(update.total || 0)}${update.reused ? ` · 已复用 ${mib(update.reused)}` : ''}`;
+        transfer.textContent = `${update.mode === 'delta' ? '增量下载' : '完整下载'} ${mib(update.downloaded || 0)} / ${mib(update.total || 0)}${update.chunks ? ` · 分块 ${update.completedChunks || 0}/${update.chunks}` : ''}${update.reused ? ` · 已复用 ${mib(update.reused)}` : ''}`;
         $('install-update').hidden = update.status !== 'ready';
         $('install-update').disabled = busy;
         $('check-update').disabled = busy || ['checking', 'downloading', 'installing'].includes(update.status) || !update.supported;

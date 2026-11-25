@@ -5,6 +5,7 @@ const { createHash } = require('node:crypto');
 const { FEED, CHECK_INTERVAL, readManifest, newer } = require('./update-policy.cjs');
 const { applyDelta } = require('./update-delta.cjs');
 const { downloadBlocks } = require('./update-blockmap.cjs');
+const { downloadRanges, CHUNK_SIZE } = require('./update-download.cjs');
 
 async function fileHash(file, progress) {
     const hash = createHash('sha256');
@@ -18,7 +19,7 @@ async function validateFile(file, entry, progress) {
 }
 function createUpdater({ currentVersion, directory, target, fetcher, install, changed = () => {}, onError = () => {}, onRecovered = () => {}, publicKey, enabled = true, feed = FEED }) {
     const root = path.join(directory, 'ota');
-    let state = { status: 'idle', currentVersion, version: '', progress: 0, downloaded: 0, total: 0, notes: '', error: '', supported: enabled, mode: 'full', phase: '', reused: 0 };
+    let state = { status: 'idle', currentVersion, version: '', progress: 0, downloaded: 0, total: 0, notes: '', error: '', supported: enabled, mode: 'full', phase: '', reused: 0, chunks: 0, completedChunks: 0 };
     let selected, entry, saved, operation, installation, checking, timer, closed = false;
     const controller = new AbortController();
     const recovered = (stage, operation) => { try { onRecovered(stage, operation); } catch {} };
@@ -86,6 +87,28 @@ function createUpdater({ currentVersion, directory, target, fetcher, install, ch
         return result;
     }
     async function downloadBytes(url, file, size, sha256, notify = true) {
+        if (size < CHUNK_SIZE) return downloadSingle(url, file, size, sha256, notify);
+        const partial = file + '.part', receipt = partial + '.json', value = { url, size, sha256 };
+        try { await validateFile(file, value); return; } catch {}
+        try {
+            const saved = JSON.parse(await fs.readFile(receipt, 'utf8'));
+            if (saved.sequential && saved.url === url && saved.size === size && saved.sha256 === sha256) return downloadSingle(url, file, size, sha256, notify);
+        } catch {}
+        try {
+            await downloadRanges({ entry: value, outputFile: partial, fetcher, signal: controller.signal, changed: patch => { if (notify) emit(patch); } });
+            if (notify) emit({ phase: 'verifying' });
+            try { await validateFile(partial, value); }
+            catch (error) { await fs.rm(partial, { force: true }); await fs.rm(receipt, { force: true }); throw error; }
+            await fs.rename(partial, file); await fs.rm(receipt, { force: true });
+        } catch (error) {
+            if (closed || error.resumableDownload || ['ENOSPC', 'EACCES', 'EPERM', 'EIO'].includes(error.code)) throw error;
+            await fs.rm(partial, { force: true }); await fs.rm(receipt, { force: true });
+            if (!error.rangeUnsupported) throw error;
+            if (notify) emit({ chunks: 0, completedChunks: 0 });
+            await downloadSingle(url, file, size, sha256, notify);
+        }
+    }
+    async function downloadSingle(url, file, size, sha256, notify = true) {
         const partial = file + '.part', receipt = partial + '.json';
         const discard = async () => { await fs.rm(partial, { force: true }); await fs.rm(receipt, { force: true }); };
         try { await validateFile(file, { size, sha256 }); return; } catch {}
@@ -112,7 +135,7 @@ function createUpdater({ currentVersion, directory, target, fetcher, install, ch
             if (result.status !== 200 && !(validRange && offset)) { invalid = true; await result.body?.cancel(); throw new Error('更新包续传响应无效，请重试'); }
             if (!result.body) throw new Error('更新包下载失败，请重试');
             const etag = result.headers.get('etag');
-            await fs.writeFile(receipt, JSON.stringify({ url, size, sha256, ...(etag && !etag.startsWith('W/') ? { validator: etag } : {}) }), { mode: 0o600 });
+            await fs.writeFile(receipt, JSON.stringify({ url, size, sha256, sequential: true, ...(etag && !etag.startsWith('W/') ? { validator: etag } : {}) }), { mode: 0o600 });
             const hash = createHash('sha256');
             if (offset) for await (const chunk of createReadStream(partial)) hash.update(chunk);
             const handle = await fs.open(partial, offset ? 'a' : 'w', 0o600);
@@ -150,9 +173,9 @@ function createUpdater({ currentVersion, directory, target, fetcher, install, ch
             return blockmap ? { file, folder, entry: savedBase } : file;
         } catch { return null; }
     }
-    async function downloadFull() {
-        emit({ status: 'downloading', mode: 'full', phase: '', error: '', progress: 0, downloaded: 0, total: entry.size, reused: 0 });
-        await downloadBytes(entry.url, path.join(saved.folder, entry.file), entry.size, entry.sha256);
+    async function downloadFull(sequential = false) {
+        emit({ status: 'downloading', mode: 'full', phase: '', error: '', progress: 0, downloaded: 0, total: entry.size, reused: 0, chunks: 0, completedChunks: 0 });
+        await (sequential ? downloadSingle : downloadBytes)(entry.url, path.join(saved.folder, entry.file), entry.size, entry.sha256);
     }
     async function download() {
         await cleanup(entry.version);
@@ -163,7 +186,7 @@ function createUpdater({ currentVersion, directory, target, fetcher, install, ch
         const base = blockBase ? null : await findBase(entry.delta);
         if (blockBase) {
             const output = path.join(saved.folder, entry.file + '.blocks.part');
-            emit({ status: 'downloading', mode: 'delta', phase: 'planning', error: '', progress: 0, downloaded: 0, total: 0, reused: 0 });
+            emit({ status: 'downloading', mode: 'delta', phase: 'planning', error: '', progress: 0, downloaded: 0, total: 0, reused: 0, chunks: 0, completedChunks: 0 });
             try {
                 const oldMap = blockBase.entry.blockmap, newMap = entry.blockmap;
                 const oldMapFile = path.join(blockBase.folder, oldMap.file), newMapFile = path.join(saved.folder, newMap.file);
@@ -177,7 +200,7 @@ function createUpdater({ currentVersion, directory, target, fetcher, install, ch
             } catch (error) {
                 if (closed || error.resumableDownload || ['ENOSPC', 'EACCES', 'EPERM', 'EIO'].includes(error.code)) throw error;
                 await fs.rm(output, { force: true }); await fs.rm(output + '.json', { force: true });
-                await downloadFull();
+                await downloadFull(error.rangeUnsupported);
             }
         } else if (base && entry.delta.size < entry.size) {
             try {
@@ -274,7 +297,7 @@ function createUpdater({ currentVersion, directory, target, fetcher, install, ch
             if (state.status !== 'error') await this.check();
             timer = setInterval(() => void this.check(), CHECK_INTERVAL); timer.unref?.();
         },
-        close() { closed = true; controller.abort(); clearInterval(timer); },
+        close() { closed = true; controller.abort(); clearInterval(timer); return operation; },
     };
 }
 module.exports = { createUpdater, validateFile, fileHash };

@@ -1,7 +1,7 @@
 const fs = require('node:fs/promises');
-const { createReadStream } = require('node:fs');
 const { gunzip } = require('node:zlib');
 const { promisify } = require('node:util');
+const { downloadRanges } = require('./update-download.cjs');
 const { computeOperations, OperationKind } = require('electron-updater/out/differentialDownloader/downloadPlanBuilder');
 
 async function readBlockmap(file, size) {
@@ -25,65 +25,13 @@ async function downloadBlocks({ baseFile, oldMapFile, newMapFile, base, entry, o
     const [oldMap, newMap] = await Promise.all([readBlockmap(oldMapFile, base.size), readBlockmap(newMapFile, entry.size)]);
     const { operations, total } = planBlocks(oldMap, newMap, entry.size);
     if (total >= entry.size) throw new Error('此版本无法复用本机安装包');
-    const receipt = outputFile + '.json', identity = JSON.stringify([base.sha256, entry.sha256, base.blockmap.sha256, entry.blockmap.sha256]);
-    const discard = async () => { await fs.rm(outputFile, { force: true }); await fs.rm(receipt, { force: true }); };
-    let offset = 0, validator;
-    try {
-        const [info, saved] = await Promise.all([fs.lstat(outputFile), fs.readFile(receipt, 'utf8').then(JSON.parse)]);
-        if (info.isFile() && info.size <= entry.size && saved.identity === identity) { offset = info.size; validator = saved.validator; }
-        else await discard();
-    } catch { await discard(); }
-    signal?.throwIfAborted();
-    await fs.writeFile(receipt, JSON.stringify({ identity, validator }), { mode: 0o600 });
-    let position = 0, downloaded = 0, progress = -1;
-    const handle = await fs.open(outputFile, offset ? 'a' : 'w', 0o600);
-    const report = () => {
-        const next = total ? Math.floor(downloaded / total * 100) : 100;
-        if (next !== progress) { progress = next; changed({ mode: 'delta', phase: '', total, downloaded, progress, reused: entry.size - total }); }
-    };
-    try {
-        for (const op of operations) {
-            signal?.throwIfAborted();
-            const length = op.end - op.start, skipped = Math.min(length, Math.max(0, offset - position));
-            if (op.kind === OperationKind.DOWNLOAD) downloaded += skipped;
-            report();
-            if (skipped === length) { position += length; continue; }
-            let body;
-            if (op.kind === OperationKind.COPY) body = createReadStream(baseFile, { start: op.start + skipped, end: op.end - 1, signal });
-            else {
-                const start = position + skipped, end = position + length - 1;
-                let response;
-                try { response = await fetcher(entry.url, { signal, cache: 'no-store', headers: { Range: `bytes=${start}-${end}`, ...(validator ? { 'If-Range': validator } : {}) } }); }
-                catch (error) { error.resumableDownload = true; throw error; }
-                if ([408, 429].includes(response.status) || response.status >= 500) {
-                    await response.body?.cancel();
-                    throw Object.assign(new Error('更新服务暂时不可用，重试后将继续下载'), { resumableDownload: true, status: response.status });
-                }
-                const range = `bytes ${start}-${end}/${entry.size}`, etag = response.headers.get('etag');
-                if (response.status !== 206 || response.headers.get('content-range') !== range || !response.body || validator && etag && validator !== etag) {
-                    await response.body?.cancel();
-                    throw Object.assign(new Error('更新服务暂不支持分块续传，改用完整更新包'), { status: response.status });
-                }
-                if (etag && !etag.startsWith('W/')) { validator = etag; await fs.writeFile(receipt, JSON.stringify({ identity, validator }), { mode: 0o600 }); }
-                body = response.body;
-            }
-            let written = skipped;
-            try {
-                for await (const chunk of body) {
-                    signal?.throwIfAborted();
-                    if (written + chunk.length > length) throw new Error('更新分块长度无效');
-                    await handle.writeFile(chunk); written += chunk.length;
-                    if (op.kind === OperationKind.DOWNLOAD) { downloaded += chunk.length; report(); }
-                }
-            } catch (error) {
-                if (op.kind === OperationKind.DOWNLOAD && !['ENOSPC', 'EIO', 'EACCES', 'EPERM', 'EBADF'].includes(error.code) && !/分块长度/.test(error.message)) error.resumableDownload = true;
-                throw error;
-            }
-            if (written !== length) throw Object.assign(new Error('更新分块下载中断，重试后将继续下载'), { resumableDownload: true });
-            position += length;
-        }
-        return { total, downloaded, reused: entry.size - total };
-    } finally { try { await handle.sync(); } finally { await handle.close(); } }
+    const result = await downloadRanges({
+        baseFile, entry, outputFile, fetcher, signal,
+        identity: JSON.stringify([base.sha256, entry.sha256, base.blockmap.sha256, entry.blockmap.sha256]),
+        operations: operations.map(op => ({ start: op.start, end: op.end, copy: op.kind === OperationKind.COPY })),
+        changed: state => changed({ ...state, mode: 'delta', reused: entry.size - total }),
+    });
+    return { ...result, reused: entry.size - total };
 }
 
 module.exports = { readBlockmap, planBlocks, downloadBlocks };

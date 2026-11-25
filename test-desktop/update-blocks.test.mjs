@@ -90,6 +90,17 @@ test('interrupted block download resumes from its durable offset', async t => {
     assert.deepEqual(await readFile(outputFile), f.next);
 });
 
+test('legacy incremental receipts retain their verified installer prefix when moving to parallel ranges', async t => {
+    const f = await fixture(t), outputFile = join(f.directory, 'legacy.blocks.part'), prefix = 151234;
+    await writeFile(outputFile, f.next.subarray(0, prefix));
+    await writeFile(outputFile + '.json', JSON.stringify({ identity: JSON.stringify([f.base.sha256, f.current.sha256, f.base.blockmap.sha256, f.current.blockmap.sha256]), validator: '"package-18"' }));
+    const requested = [];
+    await downloadBlocks({ baseFile: f.base.disk, oldMapFile: f.base.mapFile, newMapFile: f.current.mapFile, base: f.base, entry: f.current, outputFile, fetcher: async (url, init) => { requested.push(Number(/^bytes=(\d+)-/.exec(init.headers.Range)[1])); return f.fetcher(url, init); } });
+    assert.ok(requested.length > 0);
+    assert.ok(requested.every(start => start >= prefix));
+    assert.deepEqual(await readFile(outputFile), f.next);
+});
+
 test('unsupported Range falls back to a verified full download, while 503 preserves the partial update', async t => {
     for (const status of [200, 503]) await t.test(String(status), async t => {
         const f = await fixture(t);
