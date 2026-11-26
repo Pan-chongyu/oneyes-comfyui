@@ -280,8 +280,10 @@ app.on('browser-window-created', (_event, window) => {
             await waitFor(window, `(async()=>{const state=await window.oneYesDesktop.state();return state.account.user.id===18&&state.account.connected})()`);
             await js(`document.querySelector('#oneyes-tab-models').click()`);
             assert.equal(await js(`document.querySelector('#models').hidden`), false);
+            const englishReload = await js(`window.comfyAPI.app.app.graphLoadSequence`);
             await js(`window.comfyAPI.app.app.ui.settings.setSettingValueAsync('Comfy.Locale','en')`);
-            await waitFor(window, `document.documentElement.lang==='en'`);
+            await waitFor(window, `document.documentElement.lang==='en' && window.comfyAPI.app.app.graphLoadSequence>${englishReload}`);
+            await js(`window.comfyAPI.app.app.graphLoadQueue`);
             await window.webContents.loadURL(window.webContents.getURL());
             await waitFor(window, `Boolean(window.comfyAPI?.app?.app?.graph) && document.documentElement.lang==='en'`);
             assert.equal(await js(`window.comfyAPI.app.app.ui.settings.getSettingValue('Comfy.Locale')`), 'en', 'A language selected after migration must survive a reload');
@@ -323,8 +325,10 @@ app.on('browser-window-created', (_event, window) => {
             window.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
             window.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
             await waitFor(window, `!document.querySelector('.oneyes-panel')`);
+            const chineseReload = await js(`window.comfyAPI.app.app.graphLoadSequence`);
             await js(`window.comfyAPI.app.app.ui.settings.setSettingValueAsync('Comfy.Locale','zh')`);
-            await waitFor(window, `document.documentElement.lang==='zh-CN'`);
+            await waitFor(window, `document.documentElement.lang==='zh-CN' && window.comfyAPI.app.app.graphLoadSequence>${chineseReload}`);
+            await js(`window.comfyAPI.app.app.graphLoadQueue`);
             await js(`window.oneYesDesktop.openSettings('account')`);
             await waitFor(window, `Boolean(document.querySelector('#account-summary')&&!document.querySelector('#account-summary').hidden)`);
             assert.equal(await js(`document.querySelectorAll('.oneyes-panel').length`), 1);

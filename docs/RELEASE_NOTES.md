@@ -1,4 +1,4 @@
-OneYes ComfyUI v0.1.27，基于 ComfyUI 0.46.0。
+OneYes ComfyUI v0.1.28，基于 ComfyUI 0.46.0。
 
 - 右上角账户入口直接显示头像和用户名，移除用户名之前的“OneYes ·”；悬浮提示同步简化。
 - 保留余额提示、账户操作和头像适配，继续支持签名分块增量 OTA。
