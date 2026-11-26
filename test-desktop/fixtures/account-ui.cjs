@@ -123,7 +123,7 @@ async function waitFor(window, expression) {
 }
 app.on('browser-window-created', (_event, window) => {
     window.webContents.on('render-process-gone', (_event, details) => { console.error('Renderer stopped:', details.reason); app.quit(); });
-    window.webContents.on('console-message', event => { if (event.level === 'error') { rendererErrors.push(event.message); console.error('Renderer:', event.message); } });
+    window.webContents.on('console-message', event => { if (event.level === 'error') { rendererErrors.push(event.message); console.error('Renderer:', event.message, event.sourceId, event.lineNumber); } });
     window.webContents.on('did-finish-load', async () => {
         if (!window.webContents.getURL().startsWith('http://127.0.0.1:') || window.accountTestStarted) return;
         window.accountTestStarted = true;
@@ -286,7 +286,7 @@ app.on('browser-window-created', (_event, window) => {
             await waitFor(window, `Boolean(window.comfyAPI?.app?.app?.graph) && document.documentElement.lang==='en'`);
             assert.equal(await js(`window.comfyAPI.app.app.ui.settings.getSettingValue('Comfy.Locale')`), 'en', 'A language selected after migration must survive a reload');
             await js(`window.oneYesDesktop.openSettings('updates')`);
-            await waitFor(window, `Boolean(document.querySelector('.oneyes-about-settings #check-update'))`);
+            await waitFor(window, `Boolean(document.querySelector('.oneyes-about-settings #check-update')) && document.querySelector('#update-version')?.textContent.includes(${JSON.stringify('版本 v' + app.getVersion())})`);
             assert.equal(await js(`Boolean(document.querySelector('.oneyes-user-settings'))`), false, 'Update shortcuts must select About even when User settings is already open');
             assert.equal(BrowserWindow.getAllWindows().length, 1, 'Menus must reuse the native settings dialog');
             assert.match(await js(`document.querySelector('#update-version').textContent`), new RegExp(app.getVersion()));
