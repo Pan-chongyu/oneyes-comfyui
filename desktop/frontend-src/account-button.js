@@ -24,7 +24,7 @@ export default {
         const avatar = user?.avatar_url;
         const name = user?.username || user?.email || '';
         const connected = Boolean(this.account?.connected);
-        const title = user ? `OneYes · ${name} · ${connected ? '余额 $' + Number(user.balance || 0).toLocaleString('zh-CN', { maximumFractionDigits: 4 }) : '暂未连接，点击重连'}` : '登录 OneYes，使用云端模型';
+        const title = user ? `${name} · ${connected ? '余额 $' + Number(user.balance || 0).toLocaleString('zh-CN', { maximumFractionDigits: 4 }) : '暂未连接，点击重连'}` : '登录 OneYes，使用云端模型';
         return h('button', {
             type: 'button', class: 'oneyes-account-button',
             'data-testid': 'oneyes-account-button',
@@ -36,7 +36,7 @@ export default {
                 h('i', { class: 'icon-[lucide--user] size-4' }),
                 avatar && avatar !== this.failedAvatar ? h('img', { key: avatar, src: avatar, alt: '', referrerpolicy: 'no-referrer', onLoad: event => { event.target.dataset.loaded = 'true'; }, onError: () => { this.failedAvatar = avatar; } }) : null,
             ]),
-            h('span', { class: 'oneyes-account-label' }, user ? `OneYes · ${name}` : 'OneYes 登录'),
+            h('span', { class: 'oneyes-account-label' }, user ? name : 'OneYes 登录'),
         ]);
     },
 };

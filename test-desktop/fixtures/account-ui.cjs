@@ -180,7 +180,8 @@ app.on('browser-window-created', (_event, window) => {
             assert.equal(await js(`document.querySelector('#account-image').value`), '8');
             assert.equal(await js(`document.querySelector('#account-text').value`), '9');
             await waitFor(window, `document.querySelector('[data-testid="oneyes-account-button"]').dataset.connection==='connected'`);
-            assert.match(await js(`document.querySelector('[data-testid="oneyes-account-button"]').title`), /OneYes · 创作者 · 余额 \$12.34/);
+            assert.equal(await js(`document.querySelector('[data-testid="oneyes-account-button"]').title`), '创作者 · 余额 $12.34');
+            assert.equal(await js(`document.querySelector('.oneyes-account-label').textContent`), '创作者');
             const avatarReady = `(()=>{const panel=document.querySelector('#account-avatar'),button=document.querySelector('.oneyes-account-avatar img');return panel&&!panel.hidden&&panel.naturalWidth>0&&button?.dataset.loaded==='true'&&button.naturalWidth>0&&!document.querySelector('#refresh-account').disabled})()`;
             await waitFor(window, avatarReady);
             assert.equal(await js(`getComputedStyle(document.querySelector('.oneyes-account-avatar>i')).visibility`), 'hidden', 'Transparent avatars must not show the fallback glyph underneath');
